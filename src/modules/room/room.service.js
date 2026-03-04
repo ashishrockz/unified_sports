@@ -32,7 +32,7 @@ const getRoom = async (roomId) => {
 
 // ── Room CRUD ─────────────────────────────────────────────────────────────────
 
-const createRoom = async (userId, { sportTypeId, name }) => {
+const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, oversPerInnings }) => {
   if (!sportTypeId || !name) fail('sportTypeId and name are required', 400);
 
   const sportType = await SportType.findOne({ _id: sportTypeId, isActive: true });
@@ -45,22 +45,31 @@ const createRoom = async (userId, { sportTypeId, name }) => {
   });
   if (activeRoom) fail('You are already in an active room. Leave or complete it first.', 409);
 
+  // Validate overs if provided
+  let overs = null;
+  if (oversPerInnings != null) {
+    overs = Math.max(1, Math.min(20, Number(oversPerInnings)));
+    if (isNaN(overs)) overs = null;
+  }
+
+  const user = await User.findById(userId).select('name username');
+
   const room = await Room.create({
     sportTypeId,
     name,
     creator: userId,
     maxPlayers: sportType.config.maxPlayers,
     minPlayers: sportType.config.minPlayers,
+    teamAName: teamAName || 'Team A',
+    teamBName: teamBName || 'Team B',
+    oversPerInnings: overs,
     players: [{
       userId,
-      name: 'Creator',
+      name: user.name || user.username || 'Player 1',
       isStatic: false,
+      team: 'A',
     }],
   });
-
-  const user = await User.findById(userId).select('name username');
-  room.players[0].name = user.name || user.username || 'Player 1';
-  await room.save();
 
   return getRoom(room._id);
 };
@@ -90,12 +99,20 @@ const getRoomById = async (roomId) => getRoom(roomId);
 
 // ── Player management ─────────────────────────────────────────────────────────
 
-const addFriendPlayer = async (roomId, creatorId, { friendUserId, playerName }) => {
+const addFriendPlayer = async (roomId, creatorId, { friendUserId, playerName, team }) => {
+  if (!team || !['A', 'B'].includes(team)) fail('team (A or B) is required', 400);
+
   const room = await getRoom(roomId);
   assertCreator(room, creatorId);
   assertStatus(room, 'waiting');
 
   if (room.players.length >= room.maxPlayers) fail('Room is full', 400);
+
+  // Validate team capacity
+  const sportType = await SportType.findById(room.sportTypeId);
+  const teamSize = sportType?.config?.teamSize || 11;
+  const teamCount = room.players.filter((p) => p.isActive && p.team === team).length;
+  if (teamCount >= teamSize) fail(`Team ${team} is full (max ${teamSize})`, 400);
 
   const friendship = await Friend.findOne({
     status: 'accepted',
@@ -125,6 +142,7 @@ const addFriendPlayer = async (roomId, creatorId, { friendUserId, playerName }) 
     userId: friendUserId,
     name: playerName || friend.name || friend.username,
     isStatic: false,
+    team,
   });
   await room.save();
 
@@ -133,8 +151,9 @@ const addFriendPlayer = async (roomId, creatorId, { friendUserId, playerName }) 
   return updated;
 };
 
-const addStaticPlayer = async (roomId, creatorId, { name }) => {
+const addStaticPlayer = async (roomId, creatorId, { name, team }) => {
   if (!name) fail('name is required for static player', 400);
+  if (!team || !['A', 'B'].includes(team)) fail('team (A or B) is required', 400);
 
   const room = await getRoom(roomId);
   assertCreator(room, creatorId);
@@ -142,7 +161,13 @@ const addStaticPlayer = async (roomId, creatorId, { name }) => {
 
   if (room.players.length >= room.maxPlayers) fail('Room is full', 400);
 
-  room.players.push({ name, isStatic: true });
+  // Validate team capacity
+  const sportType = await SportType.findById(room.sportTypeId);
+  const teamSize = sportType?.config?.teamSize || 11;
+  const teamCount = room.players.filter((p) => p.isActive && p.team === team).length;
+  if (teamCount >= teamSize) fail(`Team ${team} is full (max ${teamSize})`, 400);
+
+  room.players.push({ name, isStatic: true, team });
   await room.save();
 
   const updated = await getRoom(roomId);
@@ -179,6 +204,19 @@ const lockRoom = async (roomId, creatorId) => {
   const activePlayers = room.players.filter((p) => p.isActive);
   if (activePlayers.length < room.minPlayers) {
     fail(`Need at least ${room.minPlayers} players to start (currently ${activePlayers.length})`, 400);
+  }
+
+  // Validate all players have a team
+  const unassigned = activePlayers.filter((p) => !p.team);
+  if (unassigned.length > 0) {
+    fail(`${unassigned.length} player(s) have no team assigned`, 400);
+  }
+
+  // Validate both teams have at least 1 player
+  const teamACount = activePlayers.filter((p) => p.team === 'A').length;
+  const teamBCount = activePlayers.filter((p) => p.team === 'B').length;
+  if (teamACount === 0 || teamBCount === 0) {
+    fail('Both teams must have at least 1 player', 400);
   }
 
   room.status = 'toss_pending';
@@ -248,11 +286,7 @@ const tossChoice = async (roomId, creatorId, { choice }) => {
   return updated;
 };
 
-const assignTeamsAndStart = async (roomId, creatorId, { assignments }) => {
-  if (!Array.isArray(assignments) || assignments.length === 0) {
-    fail('assignments array is required', 400);
-  }
-
+const assignTeamsAndStart = async (roomId, creatorId, { assignments } = {}) => {
   const room = await getRoom(roomId);
   assertCreator(room, creatorId);
   assertStatus(room, 'toss_pending');
@@ -261,12 +295,22 @@ const assignTeamsAndStart = async (roomId, creatorId, { assignments }) => {
     fail('Toss must be completed before starting the match', 400);
   }
 
-  for (const a of assignments) {
-    const slot = room.players.id(a.slotId);
-    if (!slot) continue;
-    if (!['A', 'B'].includes(a.team)) fail(`Invalid team "${a.team}" for slot ${a.slotId}`, 400);
-    slot.team = a.team;
-    if (a.role) slot.role = a.role;
+  // If assignments provided, apply them (backward compat)
+  if (Array.isArray(assignments) && assignments.length > 0) {
+    for (const a of assignments) {
+      const slot = room.players.id(a.slotId);
+      if (!slot) continue;
+      if (!['A', 'B'].includes(a.team)) fail(`Invalid team "${a.team}" for slot ${a.slotId}`, 400);
+      slot.team = a.team;
+      if (a.role) slot.role = a.role;
+    }
+  }
+
+  // Validate all active players have teams
+  const activePlayers = room.players.filter((p) => p.isActive);
+  const unassigned = activePlayers.filter((p) => !p.team);
+  if (unassigned.length > 0) {
+    fail(`${unassigned.length} player(s) have no team assigned`, 400);
   }
 
   room.status = 'active';
@@ -278,6 +322,87 @@ const assignTeamsAndStart = async (roomId, creatorId, { assignments }) => {
 
   const updated = await getRoom(roomId);
   ws.emitMatchStarted(roomId, match);
+  return updated;
+};
+
+// ── Team / Captain / Role management ─────────────────────────────────────────
+
+const switchPlayerTeam = async (roomId, creatorId, slotId, { team }) => {
+  if (!team || !['A', 'B'].includes(team)) fail('team must be A or B', 400);
+
+  const room = await getRoom(roomId);
+  assertCreator(room, creatorId);
+  assertStatus(room, 'waiting');
+
+  const slot = room.players.id(slotId);
+  if (!slot || !slot.isActive) fail('Player slot not found', 404);
+
+  if (slot.team === team) fail(`Player is already on team ${team}`, 400);
+
+  // Validate destination team capacity
+  const sportType = await SportType.findById(room.sportTypeId);
+  const teamSize = sportType?.config?.teamSize || 11;
+  const teamCount = room.players.filter((p) => p.isActive && p.team === team).length;
+  if (teamCount >= teamSize) fail(`Team ${team} is full (max ${teamSize})`, 400);
+
+  // If this player was captain of old team, clear it
+  if (slot.team === 'A' && room.captainA && room.captainA.toString() === slotId) {
+    room.captainA = null;
+  } else if (slot.team === 'B' && room.captainB && room.captainB.toString() === slotId) {
+    room.captainB = null;
+  }
+
+  slot.team = team;
+  await room.save();
+
+  const updated = await getRoom(roomId);
+  ws.emitRoomUpdated(roomId, updated);
+  return updated;
+};
+
+const setCaptain = async (roomId, creatorId, slotId) => {
+  const room = await getRoom(roomId);
+  assertCreator(room, creatorId);
+  assertStatus(room, 'waiting', 'toss_pending');
+
+  const slot = room.players.id(slotId);
+  if (!slot || !slot.isActive) fail('Player slot not found', 404);
+  if (!slot.team) fail('Player must be assigned to a team first', 400);
+
+  if (slot.team === 'A') {
+    room.captainA = slot._id;
+  } else {
+    room.captainB = slot._id;
+  }
+  await room.save();
+
+  const updated = await getRoom(roomId);
+  ws.emitRoomUpdated(roomId, updated);
+  return updated;
+};
+
+const setPlayerRole = async (roomId, creatorId, slotId, { role }) => {
+  if (!role) fail('role is required', 400);
+
+  const room = await getRoom(roomId);
+  assertCreator(room, creatorId);
+  assertStatus(room, 'waiting', 'toss_pending');
+
+  // Validate role against sport config
+  const sportType = await SportType.findById(room.sportTypeId);
+  const validRoles = (sportType?.config?.roles || []).map((r) => r.name);
+  if (validRoles.length > 0 && !validRoles.includes(role)) {
+    fail(`Invalid role. Valid roles: ${validRoles.join(', ')}`, 400);
+  }
+
+  const slot = room.players.id(slotId);
+  if (!slot || !slot.isActive) fail('Player slot not found', 404);
+
+  slot.role = role;
+  await room.save();
+
+  const updated = await getRoom(roomId);
+  ws.emitRoomUpdated(roomId, updated);
   return updated;
 };
 
@@ -305,5 +430,8 @@ module.exports = {
   performToss,
   tossChoice,
   assignTeamsAndStart,
+  switchPlayerTeam,
+  setCaptain,
+  setPlayerRole,
   abandonRoom,
 };

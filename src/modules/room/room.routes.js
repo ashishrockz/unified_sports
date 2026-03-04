@@ -236,6 +236,112 @@ router.delete('/:roomId/players/:slotId', ctrl.removePlayerHandler);
 
 /**
  * @swagger
+ * /api/rooms/{roomId}/players/{slotId}/team:
+ *   patch:
+ *     summary: Switch a player to a different team
+ *     description: Creator only. Moves a player slot from one team to another during waiting status.
+ *     tags: [Room]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: slotId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [team]
+ *             properties:
+ *               team:
+ *                 type: string
+ *                 enum: [A, B]
+ *     responses:
+ *       200:
+ *         description: Player moved to new team
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Room'
+ */
+router.patch('/:roomId/players/:slotId/team', ctrl.switchTeamHandler);
+
+/**
+ * @swagger
+ * /api/rooms/{roomId}/players/{slotId}/role:
+ *   patch:
+ *     summary: Set player role
+ *     description: Creator only. Assigns a sport-specific role to a player slot.
+ *     tags: [Room]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: slotId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [role]
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 example: batsman
+ *     responses:
+ *       200:
+ *         description: Role assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Room'
+ */
+router.patch('/:roomId/players/:slotId/role', ctrl.setRoleHandler);
+
+/**
+ * @swagger
+ * /api/rooms/{roomId}/captain/{slotId}:
+ *   patch:
+ *     summary: Set player as team captain
+ *     description: Creator only. Sets the given player as captain for their team.
+ *     tags: [Room]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: slotId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Captain set
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Room'
+ */
+router.patch('/:roomId/captain/:slotId', ctrl.setCaptainHandler);
+
+/**
+ * @swagger
  * /api/rooms/{roomId}/lock:
  *   post:
  *     summary: Lock the room and start toss phase

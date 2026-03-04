@@ -62,6 +62,24 @@ const startHandler = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const switchTeamHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.switchPlayerTeam(req.params.roomId, req.user._id, req.params.slotId, req.body));
+  } catch (err) { next(err); }
+};
+
+const setCaptainHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.setCaptain(req.params.roomId, req.user._id, req.params.slotId));
+  } catch (err) { next(err); }
+};
+
+const setRoleHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.setPlayerRole(req.params.roomId, req.user._id, req.params.slotId, req.body));
+  } catch (err) { next(err); }
+};
+
 const abandonHandler = async (req, res, next) => {
   try {
     res.json(await svc.abandonRoom(req.params.roomId, req.user._id));
@@ -79,5 +97,8 @@ module.exports = {
   tossHandler,
   tossChoiceHandler,
   startHandler,
+  switchTeamHandler,
+  setCaptainHandler,
+  setRoleHandler,
   abandonHandler,
 };

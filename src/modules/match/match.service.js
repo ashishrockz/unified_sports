@@ -83,20 +83,34 @@ const initMatch = async (roomId) => {
   const tossWinnerSlot = room.toss ? room.players.id(room.toss.winnerSlotId) : null;
   const tossWinnerTeam = tossWinnerSlot ? tossWinnerSlot.team : null;
 
+  // Apply room-level overrides for team names, captains, overs
+  const configSnapshot = { ...sportType.config.toObject ? sportType.config.toObject() : sportType.config };
+  if (room.oversPerInnings != null) {
+    configSnapshot.oversPerInnings = room.oversPerInnings;
+  }
+
   const matchData = {
     roomId,
     sportTypeId: room.sportTypeId,
     sport: sportType.sport,
-    teamA: { players: teamASlots },
-    teamB: { players: teamBSlots },
+    teamA: {
+      name: room.teamAName || 'Team A',
+      players: teamASlots,
+      captain: room.captainA || null,
+    },
+    teamB: {
+      name: room.teamBName || 'Team B',
+      players: teamBSlots,
+      captain: room.captainB || null,
+    },
     toss: { winnerTeam: tossWinnerTeam, choice: room.toss ? room.toss.choice : null },
-    config: sportType.config,
+    config: configSnapshot,
   };
 
   // Pre-build cricket innings structure
   if (sportType.sport === 'cricket') {
     const innings = [];
-    const numInnings = sportType.config.innings || 2;
+    const numInnings = configSnapshot.innings || 2;
 
     // Determine batting order: toss winner's choice drives who bats first
     let firstBat = 'A';
@@ -238,8 +252,7 @@ const recordBall = async (matchId, userId, ballData) => {
     fail('Bowler does not belong to the bowling team', 400);
   }
 
-  const sportType = await SportType.findById(match.sportTypeId);
-  const maxOvers  = sportType.config.oversPerInnings;
+  const maxOvers  = match.config.oversPerInnings;
   const maxWickets = match.teamA.players.length - 1; // all out = n-1
 
   // Find or create current over

@@ -63,6 +63,15 @@ const roomSchema = new mongoose.Schema({
   // Copied from sportType.config at room creation time for fast access
   maxPlayers: { type: Number, default: 22 },
   minPlayers: { type: Number, default: 2 },
+
+  // Team customisation
+  teamAName:       { type: String, default: 'Team A', trim: true, maxlength: 30 },
+  teamBName:       { type: String, default: 'Team B', trim: true, maxlength: 30 },
+  oversPerInnings: { type: Number, default: null, min: 1, max: 20 },
+
+  // Captain per team (player slot _id)
+  captainA: { type: mongoose.Schema.Types.ObjectId, default: null },
+  captainB: { type: mongoose.Schema.Types.ObjectId, default: null },
 }, { timestamps: true });
 
 // Fast lookup: find rooms a user is actively part of
