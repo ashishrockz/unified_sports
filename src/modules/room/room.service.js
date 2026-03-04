@@ -9,7 +9,8 @@ const ws          = require('../../websocket');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const assertCreator = (room, userId) => {
-  if (room.creator.toString() !== userId.toString()) {
+  const creatorId = room.creator._id || room.creator;
+  if (creatorId.toString() !== userId.toString()) {
     fail('Only the room creator can perform this action', 403);
   }
 };
