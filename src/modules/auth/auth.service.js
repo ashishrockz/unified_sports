@@ -20,7 +20,12 @@ const sendOtp = async (identifier, type) => {
   if (type === 'phone') {
     console.log(`[WHATSAPP OTP] Phone: ${identifier} | OTP: ${otp}`);
   } else if (type === 'email') {
-    await sendOtpEmail(identifier, otp);
+    try {
+      await sendOtpEmail(identifier, otp);
+    } catch (err) {
+      console.error('[EMAIL OTP ERROR]', err.message);
+      fail('Failed to send OTP email. Please try again.', 500);
+    }
   }
 
   return { message: 'OTP sent successfully' };
