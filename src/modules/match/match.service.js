@@ -93,6 +93,7 @@ const initMatch = async (roomId) => {
     roomId,
     sportTypeId: room.sportTypeId,
     sport: sportType.sport,
+    status: 'active',
     teamA: {
       name: room.teamAName || 'Team A',
       players: teamASlots,
