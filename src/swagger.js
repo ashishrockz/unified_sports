@@ -14,6 +14,7 @@ const options = {
       contact: { name: 'Unified Sports Dev Team' },
     },
     servers: [
+      { url: 'https://unified-sports.onrender.com', description: 'Production server' },
       { url: 'http://localhost:8080', description: 'Local development server' },
     ],
     tags: [
