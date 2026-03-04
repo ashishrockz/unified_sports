@@ -50,6 +50,12 @@ const tossHandler = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const tossChoiceHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.tossChoice(req.params.roomId, req.user._id, req.body));
+  } catch (err) { next(err); }
+};
+
 const startHandler = async (req, res, next) => {
   try {
     res.json(await svc.assignTeamsAndStart(req.params.roomId, req.user._id, req.body));
@@ -71,6 +77,7 @@ module.exports = {
   removePlayerHandler,
   lockRoomHandler,
   tossHandler,
+  tossChoiceHandler,
   startHandler,
   abandonHandler,
 };

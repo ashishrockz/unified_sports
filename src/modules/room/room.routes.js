@@ -321,6 +321,47 @@ router.post('/:roomId/toss', ctrl.tossHandler);
 
 /**
  * @swagger
+ * /api/rooms/{roomId}/toss-choice:
+ *   post:
+ *     summary: Toss winner makes their choice
+ *     description: >
+ *       Creator only. After the coin flip, the toss winner picks their choice
+ *       (e.g. bat/bowl for cricket, serve/receive for tennis).
+ *       Must be called after the toss flip and before starting the match.
+ *     tags: [Room]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [choice]
+ *             properties:
+ *               choice:
+ *                 type: string
+ *                 description: Winner's choice from sportType tossOptions
+ *                 example: bat
+ *     responses:
+ *       200:
+ *         description: Toss choice recorded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Room'
+ *       400:
+ *         description: Toss not flipped yet or choice already made
+ */
+router.post('/:roomId/toss-choice', ctrl.tossChoiceHandler);
+
+/**
+ * @swagger
  * /api/rooms/{roomId}/start:
  *   post:
  *     summary: Assign teams and start the match

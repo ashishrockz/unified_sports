@@ -188,42 +188,63 @@ const lockRoom = async (roomId, creatorId) => {
   return updated;
 };
 
-const performToss = async (roomId, creatorId, { callerSlotId, call, winnerSlotId, choice }) => {
+const performToss = async (roomId, creatorId, { callerSlotId, call, opponentSlotId }) => {
   const room = await getRoom(roomId);
   assertCreator(room, creatorId);
   assertStatus(room, 'toss_pending');
 
-  if (!callerSlotId || !call || !winnerSlotId || !choice) {
-    fail('callerSlotId, call (heads|tails), winnerSlotId, and choice are required', 400);
+  if (!callerSlotId || !call || !opponentSlotId) {
+    fail('callerSlotId, call (heads|tails), and opponentSlotId are required', 400);
   }
 
   if (!['heads', 'tails'].includes(call)) fail('call must be heads or tails', 400);
 
-  const sportType = await SportType.findById(room.sportTypeId);
-  if (!sportType.config.tossOptions.includes(choice)) {
-    fail(`Invalid toss choice. Valid options: ${sportType.config.tossOptions.join(', ')}`, 400);
-  }
-
   const callerSlot = room.players.id(callerSlotId);
-  const winnerSlot = room.players.id(winnerSlotId);
+  const opponentSlot = room.players.id(opponentSlotId);
   if (!callerSlot) fail('Caller player slot not found', 404);
-  if (!winnerSlot) fail('Winner player slot not found', 404);
+  if (!opponentSlot) fail('Opponent player slot not found', 404);
 
   const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
+  const callerWon = coinResult === call;
+  const winnerSlot = callerWon ? callerSlot : opponentSlot;
 
   room.toss = {
     initiatedBy:  creatorId,
     coinResult,
     call,
     callerSlotId,
-    winnerSlotId,
-    winnerUserId: winnerSlot.userId || null,
-    choice,
-    completedAt:  new Date(),
+    winnerSlotId:  winnerSlot._id,
+    winnerUserId:  winnerSlot.userId || null,
+    choice:        null,
+    completedAt:   null,
   };
   await room.save();
   const updated = await getRoom(roomId);
   ws.emitTossCompleted(roomId, updated);
+  return updated;
+};
+
+const tossChoice = async (roomId, creatorId, { choice }) => {
+  const room = await getRoom(roomId);
+  assertCreator(room, creatorId);
+  assertStatus(room, 'toss_pending');
+
+  if (!room.toss || room.toss.choice) {
+    fail('Toss not flipped yet or choice already made', 400);
+  }
+
+  if (!choice) fail('choice is required', 400);
+
+  const sportType = await SportType.findById(room.sportTypeId);
+  if (!sportType.config.tossOptions.includes(choice)) {
+    fail(`Invalid toss choice. Valid options: ${sportType.config.tossOptions.join(', ')}`, 400);
+  }
+
+  room.toss.choice = choice;
+  room.toss.completedAt = new Date();
+  await room.save();
+  const updated = await getRoom(roomId);
+  ws.emitRoomUpdated(roomId, updated);
   return updated;
 };
 
@@ -282,6 +303,7 @@ module.exports = {
   removePlayer,
   lockRoom,
   performToss,
+  tossChoice,
   assignTeamsAndStart,
   abandonRoom,
 };
