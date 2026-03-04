@@ -10,7 +10,7 @@ const createHandler = async (req, res, next) => {
 const getAllHandler = async (req, res, next) => {
   try {
     const { status, sportTypeId, page, limit } = req.query;
-    res.json(await svc.getRooms({ status, sportTypeId, page, limit }));
+    res.json(await svc.getRooms({ userId: req.user._id, status, sportTypeId, page, limit }));
   } catch (err) { next(err); }
 };
 

@@ -74,8 +74,14 @@ const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, ove
   return getRoom(room._id);
 };
 
-const getRooms = async ({ status, sportTypeId, page = 1, limit = 20 } = {}) => {
+const getRooms = async ({ userId, status, sportTypeId, page = 1, limit = 20 } = {}) => {
   const filter = {};
+  if (userId) {
+    filter.$or = [
+      { creator: userId },
+      { 'players.userId': userId },
+    ];
+  }
   if (status) filter.status = status;
   if (sportTypeId) filter.sportTypeId = sportTypeId;
 
@@ -226,33 +232,28 @@ const lockRoom = async (roomId, creatorId) => {
   return updated;
 };
 
-const performToss = async (roomId, creatorId, { callerSlotId, call, opponentSlotId }) => {
+const performToss = async (roomId, creatorId, { callerTeam, call }) => {
   const room = await getRoom(roomId);
   assertCreator(room, creatorId);
   assertStatus(room, 'toss_pending');
 
-  if (!callerSlotId || !call || !opponentSlotId) {
-    fail('callerSlotId, call (heads|tails), and opponentSlotId are required', 400);
+  if (!callerTeam || !call) {
+    fail('callerTeam (A|B) and call (heads|tails) are required', 400);
   }
 
+  if (!['A', 'B'].includes(callerTeam)) fail('callerTeam must be A or B', 400);
   if (!['heads', 'tails'].includes(call)) fail('call must be heads or tails', 400);
 
-  const callerSlot = room.players.id(callerSlotId);
-  const opponentSlot = room.players.id(opponentSlotId);
-  if (!callerSlot) fail('Caller player slot not found', 404);
-  if (!opponentSlot) fail('Opponent player slot not found', 404);
-
+  const opponentTeam = callerTeam === 'A' ? 'B' : 'A';
   const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
-  const callerWon = coinResult === call;
-  const winnerSlot = callerWon ? callerSlot : opponentSlot;
+  const winnerTeam = coinResult === call ? callerTeam : opponentTeam;
 
   room.toss = {
     initiatedBy:  creatorId,
     coinResult,
     call,
-    callerSlotId,
-    winnerSlotId:  winnerSlot._id,
-    winnerUserId:  winnerSlot.userId || null,
+    callerTeam,
+    winnerTeam,
     choice:        null,
     completedAt:   null,
   };

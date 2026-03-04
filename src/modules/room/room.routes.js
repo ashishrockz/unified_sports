@@ -374,12 +374,12 @@ router.post('/:roomId/lock', ctrl.lockRoomHandler);
  *   post:
  *     summary: Perform the coin toss
  *     description: >
- *       Creator only. Records toss result and winner's choice.
+ *       Creator only. Records toss result between two teams.
  *
  *       **Flow:**
- *       1. Creator specifies which player slot called heads/tails (`callerSlotId` + `call`)
+ *       1. Creator specifies which team calls heads/tails (`callerTeam` + `call`)
  *       2. Server flips the coin randomly (`coinResult`)
- *       3. Creator specifies which slot wins (`winnerSlotId`) — validated against coin result
+ *       3. Winning team is determined automatically
  *       4. Winner picks their `choice` from the sport's `tossOptions`
  *          - Cricket: `bat` | `bowl`
  *          - Tennis/Badminton: `serve` | `receive` | `court_A` | `court_B`
@@ -400,19 +400,15 @@ router.post('/:roomId/lock', ctrl.lockRoomHandler);
  *             $ref: '#/components/schemas/TossRequest'
  *           examples:
  *             cricket:
- *               summary: Cricket toss — winner bats
+ *               summary: Cricket toss — Team A calls heads
  *               value:
- *                 callerSlotId: 664a3c4d2e1f3a0045678901
+ *                 callerTeam: A
  *                 call: heads
- *                 winnerSlotId: 664a3c4d2e1f3a0045678901
- *                 choice: bat
  *             tennis:
- *               summary: Tennis toss — winner serves
+ *               summary: Tennis toss — Team B calls tails
  *               value:
- *                 callerSlotId: 664a3c4d2e1f3a0045678901
+ *                 callerTeam: B
  *                 call: tails
- *                 winnerSlotId: 664a5e6f4g3h5c0067890123
- *                 choice: serve
  *     responses:
  *       200:
  *         description: Toss recorded

@@ -607,12 +607,10 @@ const options = {
         },
         TossRequest: {
           type: 'object',
-          required: ['callerSlotId', 'call', 'winnerSlotId', 'choice'],
+          required: ['callerTeam', 'call'],
           properties: {
-            callerSlotId: { type: 'string', description: 'Player slot _id of the person calling heads/tails' },
-            call:         { type: 'string', enum: ['heads', 'tails'], description: 'The call made by the caller' },
-            winnerSlotId: { type: 'string', description: 'Player slot _id of the toss winner' },
-            choice:       { type: 'string', description: 'Winner\'s choice from the sport\'s tossOptions (e.g. bat, bowl, serve)' },
+            callerTeam: { type: 'string', enum: ['A', 'B'], description: 'Team calling the toss (A or B)' },
+            call:       { type: 'string', enum: ['heads', 'tails'], description: 'The call made by the calling team' },
           },
         },
         StartMatchRequest: {
@@ -651,8 +649,8 @@ const options = {
           properties: {
             coinResult:   { type: 'string', enum: ['heads', 'tails'], example: 'heads' },
             call:         { type: 'string', enum: ['heads', 'tails'], example: 'heads' },
-            callerSlotId: { type: 'string', example: '664a3b4c2d1e3f0045678901' },
-            winnerSlotId: { type: 'string', example: '664a3b4c2d1e3f0045678901' },
+            callerTeam:   { type: 'string', enum: ['A', 'B'], example: 'A' },
+            winnerTeam:   { type: 'string', enum: ['A', 'B'], example: 'A' },
             choice:       { type: 'string', example: 'bat', description: 'Winner\'s choice from tossOptions' },
             completedAt:  { type: 'string', format: 'date-time' },
           },

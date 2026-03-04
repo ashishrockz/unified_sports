@@ -55,11 +55,10 @@ const assertMatchStatus = (match, ...statuses) => {
   }
 };
 
-// Derive which team won the toss based on room toss + sport
+// Derive which team won the toss
 const getTossWinnerTeam = (room) => {
   if (!room.toss) return null;
-  const winnerSlot = room.players.id(room.toss.winnerSlotId);
-  return winnerSlot ? winnerSlot.team : null;
+  return room.toss.winnerTeam || null;
 };
 
 // ── Match initialization ──────────────────────────────────────────────────────
@@ -80,8 +79,7 @@ const initMatch = async (roomId) => {
   const teamASlots = room.players.filter((p) => p.team === 'A' && p.isActive).map((p) => p._id);
   const teamBSlots = room.players.filter((p) => p.team === 'B' && p.isActive).map((p) => p._id);
 
-  const tossWinnerSlot = room.toss ? room.players.id(room.toss.winnerSlotId) : null;
-  const tossWinnerTeam = tossWinnerSlot ? tossWinnerSlot.team : null;
+  const tossWinnerTeam = getTossWinnerTeam(room);
 
   // Apply room-level overrides for team names, captains, overs
   const configSnapshot = { ...sportType.config.toObject ? sportType.config.toObject() : sportType.config };

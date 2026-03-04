@@ -16,11 +16,10 @@ const tossSchema = new mongoose.Schema({
   initiatedBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   // The coin flip
   coinResult:      { type: String, enum: ['heads', 'tails'] },
-  call:            { type: String, enum: ['heads', 'tails'] }, // what the caller chose
-  callerSlotId:    mongoose.Schema.Types.ObjectId,             // player slot that made the call
+  call:            { type: String, enum: ['heads', 'tails'] }, // what the caller team chose
+  callerTeam:      { type: String, enum: ['A', 'B'] },        // team that called the toss
   // The winner and their choice
-  winnerSlotId:    mongoose.Schema.Types.ObjectId,
-  winnerUserId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  winnerTeam:      { type: String, enum: ['A', 'B'] },        // team that won the toss
   choice:          { type: String }, // 'bat'|'bowl'|'serve'|'receive'|'court_A'|'court_B'|'side_A'|'side_B'
   completedAt:     { type: Date },
 }, { _id: false });
