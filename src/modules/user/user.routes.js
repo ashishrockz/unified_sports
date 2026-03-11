@@ -5,6 +5,7 @@ const {
   updateProfileHandler,
   getAllUsersHandler,
   getUserByIdHandler,
+  getPlayerStatsHandler,
 } = require('./user.controller');
 
 // ─── Swagger component additions ─────────────────────────────────────────────
@@ -513,5 +514,34 @@ router.put('/profile', protect, updateProfileHandler);
  *         $ref: '#/components/responses/Unauthorized'
  */
 router.get('/:userId', protect, getUserByIdHandler);
+
+/**
+ * @swagger
+ * /api/user/{userId}/stats:
+ *   get:
+ *     summary: Get a user's aggregated match stats
+ *     description: >
+ *       Returns aggregated cricket match performance stats for a user,
+ *       computed from all completed matches. Stats are split by matchType (all, local, tournament)
+ *       and include batting, bowling, and win/loss records.
+ *     tags: [User]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The target user's MongoDB ObjectId
+ *     responses:
+ *       200:
+ *         description: Player stats
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.get('/:userId/stats', protect, getPlayerStatsHandler);
 
 module.exports = router;

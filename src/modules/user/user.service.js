@@ -1,5 +1,6 @@
 const User   = require('./user.model');
 const Friend = require('../friends/friend.model');
+const Match  = require('../match/match.model');
 const { fail } = require('../../utils/AppError');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -256,9 +257,155 @@ const getUserById = async (currentUserId, targetUserId) => {
   return profile;
 };
 
+/**
+ * Aggregate a user's cricket match stats from completed matches.
+ * Returns batting, bowling, and match win/loss stats split by matchType.
+ */
+const getPlayerStats = async (targetUserId) => {
+  const user = await User.findById(targetUserId).select(PUBLIC_FIELDS);
+  if (!user) fail('User not found', 404);
+
+  const matches = await Match.find({
+    status: 'completed',
+    sport: 'cricket',
+  }).populate('roomId').lean();
+
+  const buildEmpty = () => ({
+    matches: 0, wins: 0, losses: 0,
+    batting: { runs: 0, ballsFaced: 0, innings: 0, fours: 0, sixes: 0, highestScore: 0, average: 0, strikeRate: 0 },
+    bowling: { wickets: 0, runsConceded: 0, ballsBowled: 0, overs: '0.0', economy: 0, bestWickets: 0, bestRuns: 0, bestBowling: '0/0' },
+  });
+
+  const statsByType = { all: buildEmpty(), local: buildEmpty(), tournament: buildEmpty() };
+  const uid = targetUserId.toString();
+
+  for (const match of matches) {
+    const room = match.roomId;
+    if (!room) continue;
+
+    // Build slotId → userId map
+    const slotMap = {};
+    let userSlotId = null;
+    let userTeam = null;
+    for (const slot of room.players) {
+      slotMap[slot._id.toString()] = slot.userId?.toString() || null;
+      if (slot.userId?.toString() === uid) {
+        userSlotId = slot._id.toString();
+        userTeam = slot.team;
+      }
+    }
+
+    // Check if user participated
+    if (!userSlotId) continue;
+
+    const mType = match.matchType || 'local';
+    const types = ['all', mType];
+
+    // Win/loss
+    for (const t of types) {
+      statsByType[t].matches += 1;
+      if (match.result?.winner === userTeam) {
+        statsByType[t].wins += 1;
+      } else if (match.result?.winner && match.result.winner !== 'draw' && match.result.winner !== 'no_result') {
+        statsByType[t].losses += 1;
+      }
+    }
+
+    const matchId = match._id.toString();
+
+    // Per-innings tracking for highest score and best bowling
+    const inningsScores = {};  // `${innNum}` → runs
+    const inningsFigures = {}; // `${innNum}` → { wickets, runs }
+
+    for (const inn of match.innings) {
+      for (const over of inn.overs) {
+        for (const ball of over.balls) {
+          // Batting
+          if (slotMap[ball.batsmanId?.toString()] === uid) {
+            const innKey = `${matchId}-${inn.number}`;
+            for (const t of types) {
+              const b = statsByType[t].batting;
+              b.runs += ball.runs || 0;
+              if (ball.isLegal) b.ballsFaced += 1;
+              if (ball.runs === 4) b.fours += 1;
+              if (ball.runs === 6) b.sixes += 1;
+            }
+            inningsScores[innKey] = (inningsScores[innKey] || 0) + (ball.runs || 0);
+          }
+
+          // Bowling
+          if (slotMap[ball.bowlerId?.toString()] === uid) {
+            const innKey = `${matchId}-${inn.number}`;
+            const conceded = (ball.runs || 0) + (ball.extras?.runs || 0);
+            for (const t of types) {
+              const bw = statsByType[t].bowling;
+              bw.runsConceded += conceded;
+              if (ball.wicket?.type) bw.wickets += 1;
+              if (ball.isLegal) bw.ballsBowled += 1;
+            }
+            if (!inningsFigures[innKey]) inningsFigures[innKey] = { wickets: 0, runs: 0 };
+            inningsFigures[innKey].runs += conceded;
+            if (ball.wicket?.type) inningsFigures[innKey].wickets += 1;
+          }
+        }
+      }
+    }
+
+    // Update highest score
+    for (const [, runs] of Object.entries(inningsScores)) {
+      for (const t of types) {
+        if (runs > statsByType[t].batting.highestScore) {
+          statsByType[t].batting.highestScore = runs;
+        }
+      }
+    }
+
+    // Update batting innings count
+    const battingInnings = Object.keys(inningsScores).length;
+    if (battingInnings > 0) {
+      for (const t of types) {
+        statsByType[t].batting.innings += battingInnings;
+      }
+    }
+
+    // Update best bowling
+    for (const [, fig] of Object.entries(inningsFigures)) {
+      for (const t of types) {
+        const bw = statsByType[t].bowling;
+        if (fig.wickets > bw.bestWickets || (fig.wickets === bw.bestWickets && fig.runs < bw.bestRuns)) {
+          bw.bestWickets = fig.wickets;
+          bw.bestRuns = fig.runs;
+        }
+      }
+    }
+  }
+
+  // Compute derived stats
+  for (const t of Object.keys(statsByType)) {
+    const s = statsByType[t];
+    const bat = s.batting;
+    bat.average = bat.innings > 0 ? Number((bat.runs / bat.innings).toFixed(2)) : 0;
+    bat.strikeRate = bat.ballsFaced > 0 ? Number(((bat.runs / bat.ballsFaced) * 100).toFixed(2)) : 0;
+
+    const bw = s.bowling;
+    const fullOvers = Math.floor(bw.ballsBowled / 6);
+    const partialBalls = bw.ballsBowled % 6;
+    bw.overs = `${fullOvers}.${partialBalls}`;
+    const oversDecimal = fullOvers + partialBalls / 6;
+    bw.economy = oversDecimal > 0 ? Number((bw.runsConceded / oversDecimal).toFixed(2)) : 0;
+    bw.bestBowling = `${bw.bestWickets}/${bw.bestRuns}`;
+  }
+
+  return {
+    user: user.toObject(),
+    cricket: statsByType,
+  };
+};
+
 module.exports = {
   getProfile,
   updateProfile,
   getAllUsers,
   getUserById,
+  getPlayerStats,
 };

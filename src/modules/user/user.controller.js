@@ -3,6 +3,7 @@ const {
   updateProfile,
   getAllUsers,
   getUserById,
+  getPlayerStats,
 } = require('./user.service');
 
 const getProfileHandler = async (req, res, next) => {
@@ -42,9 +43,19 @@ const getUserByIdHandler = async (req, res, next) => {
   }
 };
 
+const getPlayerStatsHandler = async (req, res, next) => {
+  try {
+    const stats = await getPlayerStats(req.params.userId);
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getProfileHandler,
   updateProfileHandler,
   getAllUsersHandler,
   getUserByIdHandler,
+  getPlayerStatsHandler,
 };
