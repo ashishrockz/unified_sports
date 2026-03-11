@@ -18,8 +18,10 @@ const auditLogRoutes = require("./modules/auditLog/auditLog.routes");
 const analyticsRoutes = require("./modules/analytics/analytics.routes");
 const leaderboardRoutes = require("./modules/leaderboard/leaderboard.routes");
 const highlightsRoutes = require("./modules/highlights/highlights.routes");
+const appConfigRoutes = require("./modules/appConfig/appConfig.routes");
 
 const { apiLimiter } = require("./middlewares/rateLimiter");
+const { maintenanceCheck } = require("./middlewares/maintenance.middleware");
 
 const app = express();
 
@@ -49,6 +51,12 @@ app.get("/api/docs.json", (_req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);
 });
+
+// ── App Config (public + admin) ──────────────────────────────────────────────
+app.use("/api/app-config", appConfigRoutes);
+
+// ── Maintenance gate (blocks non-admin routes when enabled) ──────────────────
+app.use(maintenanceCheck);
 
 // ── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
