@@ -83,6 +83,7 @@ const matchSchema = new mongoose.Schema({
   roomId:        { type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true, unique: true },
   sportTypeId:   { type: mongoose.Schema.Types.ObjectId, ref: 'SportType', required: true },
   sport:         { type: String, enum: ['cricket', 'tennis', 'badminton', 'pickleball'], required: true },
+  matchType:     { type: String, enum: ['local', 'tournament'], default: 'local' },
 
   // Teams (player slot IDs from room)
   teamA: {

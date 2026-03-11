@@ -22,7 +22,7 @@ const getProfile = async (userId) => {
 };
 
 const updateProfile = async (userId, updates) => {
-  const allowed = ['name', 'username', 'avatar'];
+  const allowed = ['name', 'avatar'];
   const filtered = {};
   allowed.forEach((key) => {
     if (updates[key] !== undefined) filtered[key] = updates[key];

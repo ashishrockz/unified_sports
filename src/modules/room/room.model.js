@@ -63,6 +63,13 @@ const roomSchema = new mongoose.Schema({
   maxPlayers: { type: Number, default: 22 },
   minPlayers: { type: Number, default: 2 },
 
+  // Match classification
+  matchType: {
+    type: String,
+    enum: ['local', 'tournament'],
+    default: 'local',
+  },
+
   // Team customisation
   teamAName:       { type: String, default: 'Team A', trim: true, maxlength: 30 },
   teamBName:       { type: String, default: 'Team B', trim: true, maxlength: 30 },

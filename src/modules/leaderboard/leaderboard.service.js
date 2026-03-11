@@ -1,5 +1,6 @@
 const Match = require('../match/match.model');
 const User = require('../user/user.model');
+const Friend = require('../friends/friend.model');
 const { fail } = require('../../utils/AppError');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -57,19 +58,44 @@ const enrichWithUserData = async (entries) => {
   return entries;
 };
 
+/** Get set of friend userIds for scope filtering */
+const getFriendIds = async (userId) => {
+  if (!userId) return null;
+  const friends = await Friend.find({
+    $or: [{ requester: userId }, { recipient: userId }],
+    status: 'accepted',
+  }).lean();
+
+  const ids = new Set();
+  ids.add(userId.toString()); // include self
+  for (const f of friends) {
+    ids.add(f.requester.toString());
+    ids.add(f.recipient.toString());
+  }
+  return ids;
+};
+
+/** Filter leaderboard entries to only include friends (+ self) */
+const filterByScope = (leaderboard, friendIds) => {
+  if (!friendIds) return leaderboard;
+  return leaderboard.filter((e) => friendIds.has(e.userId));
+};
+
 /** Load completed matches for a sport/period, with room populated */
-const loadMatches = async (sport, period, extraFilter = {}) => {
+const loadMatches = async (sport, period, extraFilter = {}, matchType) => {
   const periodFilter = getPeriodFilter(period);
   const filter = { status: 'completed', ...periodFilter, ...extraFilter };
   if (sport) filter.sport = sport;
+  if (matchType && matchType !== 'all') filter.matchType = matchType;
 
   return Match.find(filter).populate('roomId').lean();
 };
 
 // ─── Cricket Batting Leaderboard ────────────────────────────────────────────
 
-const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20 } = {}) => {
-  const matches = await loadMatches('cricket', period);
+const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
+  const matches = await loadMatches('cricket', period, {}, matchType);
+  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
   const stats = {};
 
   for (const match of matches) {
@@ -127,7 +153,7 @@ const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20 } =
     }
   }
 
-  const leaderboard = Object.values(stats).map((s) => ({
+  let leaderboard = Object.values(stats).map((s) => ({
     userId: s.userId,
     name: s.name,
     matches: s._matches.size,
@@ -141,14 +167,16 @@ const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20 } =
     average: s._innings.size > 0 ? Number((s.runs / s._innings.size).toFixed(2)) : 0,
   }));
 
+  leaderboard = filterByScope(leaderboard, friendIds);
   leaderboard.sort((a, b) => b.runs - a.runs);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
 
 // ─── Cricket Bowling Leaderboard ────────────────────────────────────────────
 
-const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20 } = {}) => {
-  const matches = await loadMatches('cricket', period);
+const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
+  const matches = await loadMatches('cricket', period, {}, matchType);
+  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
   const stats = {};
 
   for (const match of matches) {
@@ -214,7 +242,7 @@ const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20 } =
     }
   }
 
-  const leaderboard = Object.values(stats).map((s) => {
+  let leaderboard = Object.values(stats).map((s) => {
     const fullOvers = Math.floor(s.ballsBowled / 6);
     const partialBalls = s.ballsBowled % 6;
     const oversDecimal = fullOvers + partialBalls / 6;
@@ -233,14 +261,16 @@ const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20 } =
     };
   });
 
+  leaderboard = filterByScope(leaderboard, friendIds);
   leaderboard.sort((a, b) => b.wickets - a.wickets || a.economy - b.economy);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
 
 // ─── Wins Leaderboard (all sports) ──────────────────────────────────────────
 
-const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20 } = {}) => {
-  const matches = await loadMatches(sport, period, { 'result.winner': { $in: ['A', 'B', 'draw'] } });
+const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
+  const matches = await loadMatches(sport, period, { 'result.winner': { $in: ['A', 'B', 'draw'] } }, matchType);
+  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
   const stats = {};
 
   for (const match of matches) {
@@ -276,19 +306,21 @@ const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20 } = {}
     }
   }
 
-  const leaderboard = Object.values(stats).map((s) => ({
+  let leaderboard = Object.values(stats).map((s) => ({
     ...s,
     winPercentage: s.matches > 0 ? Number(((s.wins / s.matches) * 100).toFixed(1)) : 0,
   }));
 
+  leaderboard = filterByScope(leaderboard, friendIds);
   leaderboard.sort((a, b) => b.wins - a.wins || b.winPercentage - a.winPercentage);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
 
 // ─── Most Matches Leaderboard ───────────────────────────────────────────────
 
-const getMostMatchesLeaderboard = async ({ sport, period = 'alltime', limit = 20 } = {}) => {
-  const matches = await loadMatches(sport, period);
+const getMostMatchesLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
+  const matches = await loadMatches(sport, period, {}, matchType);
+  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
   const stats = {};
 
   for (const match of matches) {
@@ -310,7 +342,8 @@ const getMostMatchesLeaderboard = async ({ sport, period = 'alltime', limit = 20
     }
   }
 
-  const leaderboard = Object.values(stats);
+  let leaderboard = Object.values(stats);
+  leaderboard = filterByScope(leaderboard, friendIds);
   leaderboard.sort((a, b) => b.matches - a.matches);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };

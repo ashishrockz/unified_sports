@@ -32,7 +32,7 @@ const getRoom = async (roomId) => {
 
 // ── Room CRUD ─────────────────────────────────────────────────────────────────
 
-const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, oversPerInnings }) => {
+const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, oversPerInnings, matchType }) => {
   if (!sportTypeId || !name) fail('sportTypeId and name are required', 400);
 
   const sportType = await SportType.findOne({ _id: sportTypeId, isActive: true });
@@ -62,6 +62,7 @@ const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, ove
     minPlayers: sportType.config.minPlayers,
     teamAName: teamAName || 'Team A',
     teamBName: teamBName || 'Team B',
+    matchType: matchType === 'tournament' ? 'tournament' : 'local',
     oversPerInnings: overs,
     players: [{
       userId,

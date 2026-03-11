@@ -103,6 +103,7 @@ const initMatch = async (roomId) => {
       captain: room.captainB || null,
     },
     toss: { winnerTeam: tossWinnerTeam, choice: room.toss ? room.toss.choice : null },
+    matchType: room.matchType || 'local',
     config: configSnapshot,
   };
 
