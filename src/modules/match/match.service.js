@@ -225,6 +225,7 @@ const setBattingLineup = async (matchId, userId, { inningsNum, lineup, strikerId
 
   match.markModified('innings');
   await match.save();
+  ws.emitScoreUpdate(match.roomId, match);
   return match;
 };
 
