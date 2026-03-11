@@ -19,7 +19,17 @@ const findRelationship = (userA, userB) =>
 // ── Services ─────────────────────────────────────────────────────────────────
 
 const getProfile = async (userId) => {
-  return User.findById(userId).select('-__v -password');
+  const user = await User.findById(userId).select('-__v -password');
+  if (!user) fail('User not found', 404);
+
+  const friendsCount = await Friend.countDocuments({
+    $or: [{ requester: userId }, { recipient: userId }],
+    status: 'accepted',
+  });
+
+  const obj = user.toObject();
+  obj.friendsCount = friendsCount;
+  return obj;
 };
 
 const updateProfile = async (userId, updates) => {
@@ -29,10 +39,20 @@ const updateProfile = async (userId, updates) => {
     if (updates[key] !== undefined) filtered[key] = updates[key];
   });
 
-  return User.findByIdAndUpdate(userId, filtered, {
+  const user = await User.findByIdAndUpdate(userId, filtered, {
     new: true,
     runValidators: true,
   }).select('-__v -password');
+  if (!user) fail('User not found', 404);
+
+  const friendsCount = await Friend.countDocuments({
+    $or: [{ requester: userId }, { recipient: userId }],
+    status: 'accepted',
+  });
+
+  const obj = user.toObject();
+  obj.friendsCount = friendsCount;
+  return obj;
 };
 
 /**
