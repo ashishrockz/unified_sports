@@ -6,6 +6,7 @@ const {
   getOneHandler,
   updateHandler,
   deleteHandler,
+  getByUserHandler,
 } = require('./sports.controller');
 
 router.use(protect);
@@ -264,6 +265,36 @@ router.post('/', createHandler);
  *         $ref: '#/components/responses/Unauthorized'
  */
 router.get('/', getAllHandler);
+
+/**
+ * @swagger
+ * /api/sports/user/{userId}:
+ *   get:
+ *     summary: Get all sport profiles for a specific user
+ *     description: Returns an array of all sport profiles belonging to the specified user. Any authenticated user can view.
+ *     tags: [Sports]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId of the user
+ *     responses:
+ *       200:
+ *         description: List of sport profiles
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SportProfile'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.get('/user/:userId', getByUserHandler);
 
 /**
  * @swagger

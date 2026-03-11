@@ -73,4 +73,13 @@ const deleteHandler = async (req, res, next) => {
   }
 };
 
-module.exports = { createHandler, getAllHandler, getOneHandler, updateHandler, deleteHandler };
+const getByUserHandler = async (req, res, next) => {
+  try {
+    const profiles = await getAllSportProfiles(req.params.userId);
+    res.json(profiles);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { createHandler, getAllHandler, getOneHandler, updateHandler, deleteHandler, getByUserHandler };
