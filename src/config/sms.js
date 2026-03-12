@@ -15,7 +15,8 @@ const sendSms = async (to, body) => {
   }
 
   if (!twilio.accountSid || !twilio.authToken || !twilio.phoneNumber) {
-    throw new Error('Twilio credentials are incomplete. Please configure Account SID, Auth Token, and Phone Number.');
+    console.log(`[SMS] Twilio credentials incomplete. To: ${to} | Body: ${body}`);
+    return { success: false, reason: 'Twilio credentials incomplete' };
   }
 
   const client = require('twilio')(twilio.accountSid, twilio.authToken);

@@ -46,12 +46,60 @@ const getTransporter = async () => {
 
 const sendOtpEmail = async (to, otp) => {
   const { transporter, from } = await getTransporter();
+  const appName = process.env.APP_NAME || 'CricCircle';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login OTP</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #1a472a 0%, #2d6a4f 100%); padding: 28px 32px; text-align: center; }
+    .header h1 { color: #fff; margin: 0; font-size: 24px; letter-spacing: 1px; }
+    .header p { color: #a8d5b5; margin: 6px 0 0; font-size: 13px; }
+    .body { padding: 32px; }
+    .body p { color: #444; font-size: 15px; line-height: 1.6; }
+    .otp-box { background: #f0f7f2; border: 2px dashed #2d6a4f; border-radius: 8px; text-align: center; padding: 20px; margin: 24px 0; }
+    .otp-code { font-size: 44px; font-weight: 900; letter-spacing: 12px; color: #1a472a; font-family: 'Courier New', monospace; }
+    .otp-note { font-size: 12px; color: #888; margin-top: 8px; }
+    .footer { background: #f9f9f9; border-top: 1px solid #eee; padding: 16px 32px; text-align: center; }
+    .footer p { font-size: 12px; color: #aaa; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${appName}</h1>
+      <p>Login Request</p>
+    </div>
+    <div class="body">
+      <p>Hi there,</p>
+      <p>You requested a <strong>Login</strong> OTP. Use the code below to proceed:</p>
+      <div class="otp-box">
+        <div class="otp-code">${otp}</div>
+        <div class="otp-note">Valid for <strong>10 minutes</strong> &bull; Do not share this code</div>
+      </div>
+      <p>If you didn't request this, please ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `Your Login OTP is: ${otp}\n\nValid for 10 minutes. Do not share this code.`;
+
   const info = await transporter.sendMail({
-    from,
+    from: `"${appName}" <${from}>`,
     to,
-    subject: 'Your CricCircle OTP',
-    text:    `Your OTP is: ${otp}\n\nThis OTP is valid for 10 minutes. Do not share it with anyone.`,
-    html:    `<p>Your OTP is: <strong>${otp}</strong></p><p>Valid for 10 minutes. Do not share it.</p>`,
+    subject: `[${appName}] Your Login OTP: ${otp}`,
+    html,
+    text,
   });
   console.log('[EMAIL OTP] Sent to', to, '| messageId:', info.messageId);
 };

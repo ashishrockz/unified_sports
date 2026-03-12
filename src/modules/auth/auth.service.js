@@ -18,15 +18,18 @@ const sendOtp = async (identifier, type) => {
   await Otp.deleteMany({ identifier, used: false });
   await Otp.create({ identifier, type, otp, expiresAt });
 
+  let smsSent = true;
+
   if (type === 'phone') {
     try {
       const result = await sendSms(identifier, `Your CricCircle OTP is: ${otp}. Valid for 10 minutes.`);
       if (!result.success) {
-        console.log(`[SMS OTP] Twilio disabled. Phone: ${identifier} | OTP: ${otp}`);
+        console.log(`[SMS OTP] Twilio not available. Phone: ${identifier} | OTP: ${otp}`);
+        smsSent = false;
       }
     } catch (err) {
       console.error('[SMS OTP ERROR]', err.message);
-      fail('Failed to send OTP via SMS. Please try again.', 500);
+      smsSent = false;
     }
   } else if (type === 'email') {
     try {
@@ -37,7 +40,12 @@ const sendOtp = async (identifier, type) => {
     }
   }
 
-  return { message: 'OTP sent successfully' };
+  // Return OTP in response when SMS could not be delivered (dev/testing fallback)
+  const response = { message: 'OTP sent successfully' };
+  if (type === 'phone' && !smsSent) {
+    response.otp = otp;
+  }
+  return response;
 };
 
 /**
