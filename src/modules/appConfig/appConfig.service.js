@@ -51,6 +51,15 @@ const getPublicConfig = async () => {
     if (obj.content.forceUpdate) delete obj.content.forceUpdate._id;
   }
   if (obj.branding) delete obj.branding._id;
+  if (obj.advertisements) {
+    delete obj.advertisements._id;
+    if (obj.advertisements.placements) {
+      delete obj.advertisements.placements._id;
+      if (obj.advertisements.placements.splash) delete obj.advertisements.placements.splash._id;
+      if (obj.advertisements.placements.homeBanner) delete obj.advertisements.placements.homeBanner._id;
+      if (obj.advertisements.placements.tossScreen) delete obj.advertisements.placements.tossScreen._id;
+    }
+  }
 
   return obj;
 };
@@ -63,7 +72,7 @@ const updateConfig = async (updates, actorId, ip) => {
   const oldVersion = config.version;
 
   // Merge each top-level section
-  const sections = ['maintenance', 'features', 'settings', 'content', 'branding'];
+  const sections = ['maintenance', 'features', 'settings', 'content', 'branding', 'advertisements'];
   const changes = {};
 
   for (const section of sections) {
@@ -111,6 +120,7 @@ const updateConfig = async (updates, actorId, ip) => {
   config.markModified('settings');
   config.markModified('content');
   config.markModified('branding');
+  config.markModified('advertisements');
 
   await config.save();
 

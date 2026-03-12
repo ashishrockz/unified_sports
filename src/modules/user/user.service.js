@@ -292,8 +292,8 @@ const getPlayerStats = async (targetUserId) => {
 
   const buildEmpty = () => ({
     matches: 0, wins: 0, losses: 0,
-    batting: { runs: 0, ballsFaced: 0, innings: 0, fours: 0, sixes: 0, highestScore: 0, average: 0, strikeRate: 0 },
-    bowling: { wickets: 0, runsConceded: 0, ballsBowled: 0, overs: '0.0', economy: 0, bestWickets: 0, bestRuns: 0, bestBowling: '0/0' },
+    batting: { runs: 0, ballsFaced: 0, innings: 0, fours: 0, sixes: 0, highestScore: 0, average: 0, strikeRate: 0, fifties: 0, hundreds: 0, doubleHundreds: 0 },
+    bowling: { wickets: 0, runsConceded: 0, ballsBowled: 0, overs: '0.0', economy: 0, bestWickets: 0, bestRuns: 0, bestBowling: '0/0', fiveWicketHauls: 0, hatTricks: 0 },
   });
 
   const statsByType = { all: buildEmpty(), local: buildEmpty(), tournament: buildEmpty() };
@@ -337,6 +337,10 @@ const getPlayerStats = async (targetUserId) => {
     const inningsScores = {};  // `${innNum}` → runs
     const inningsFigures = {}; // `${innNum}` → { wickets, runs }
 
+    // Hat-trick tracking: consecutive wickets by this bowler across balls
+    let consecutiveWickets = 0;
+    let hatTricksInMatch = 0;
+
     for (const inn of match.innings) {
       for (const over of inn.overs) {
         for (const ball of over.balls) {
@@ -366,16 +370,44 @@ const getPlayerStats = async (targetUserId) => {
             if (!inningsFigures[innKey]) inningsFigures[innKey] = { wickets: 0, runs: 0 };
             inningsFigures[innKey].runs += conceded;
             if (ball.wicket?.type) inningsFigures[innKey].wickets += 1;
+
+            // Hat-trick detection: count consecutive wickets on legal deliveries
+            if (ball.isLegal) {
+              if (ball.wicket?.type) {
+                consecutiveWickets += 1;
+                if (consecutiveWickets >= 3) hatTricksInMatch += 1;
+              } else {
+                consecutiveWickets = 0;
+              }
+            }
+          } else if (ball.isLegal) {
+            // Different bowler on a legal ball resets the streak
+            consecutiveWickets = 0;
           }
         }
       }
     }
 
-    // Update highest score
+    // Add hat-tricks for this match
+    if (hatTricksInMatch > 0) {
+      for (const t of types) {
+        statsByType[t].bowling.hatTricks += hatTricksInMatch;
+      }
+    }
+
+    // Update highest score + batting milestones (50s, 100s, 200s)
     for (const [, runs] of Object.entries(inningsScores)) {
       for (const t of types) {
         if (runs > statsByType[t].batting.highestScore) {
           statsByType[t].batting.highestScore = runs;
+        }
+        // Count milestones (mutually exclusive: 200 counts as 200 only, not also as 100/50)
+        if (runs >= 200) {
+          statsByType[t].batting.doubleHundreds += 1;
+        } else if (runs >= 100) {
+          statsByType[t].batting.hundreds += 1;
+        } else if (runs >= 50) {
+          statsByType[t].batting.fifties += 1;
         }
       }
     }
@@ -388,13 +420,16 @@ const getPlayerStats = async (targetUserId) => {
       }
     }
 
-    // Update best bowling
+    // Update best bowling + 5-wicket hauls
     for (const [, fig] of Object.entries(inningsFigures)) {
       for (const t of types) {
         const bw = statsByType[t].bowling;
         if (fig.wickets > bw.bestWickets || (fig.wickets === bw.bestWickets && fig.runs < bw.bestRuns)) {
           bw.bestWickets = fig.wickets;
           bw.bestRuns = fig.runs;
+        }
+        if (fig.wickets >= 5) {
+          bw.fiveWicketHauls += 1;
         }
       }
     }

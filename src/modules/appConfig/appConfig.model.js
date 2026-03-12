@@ -84,6 +84,31 @@ const appConfigSchema = new mongoose.Schema(
       logoUrl: { type: String, default: '' },
     },
 
+    // ── Advertisements / Sponsors ─────────────────────────────
+    advertisements: {
+      enabled: { type: Boolean, default: false },
+      placements: {
+        splash: {
+          enabled: { type: Boolean, default: false },
+          imageUrl: { type: String, default: '' },
+          linkUrl: { type: String, default: '' },
+          sponsorName: { type: String, default: '' },
+        },
+        homeBanner: {
+          enabled: { type: Boolean, default: false },
+          imageUrl: { type: String, default: '' },
+          linkUrl: { type: String, default: '' },
+          sponsorName: { type: String, default: '' },
+        },
+        tossScreen: {
+          enabled: { type: Boolean, default: false },
+          logoUrl: { type: String, default: '' },
+          sponsorName: { type: String, default: '' },
+          tagline: { type: String, default: '' },
+        },
+      },
+    },
+
     // ── Metadata ──────────────────────────────────────────────
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
