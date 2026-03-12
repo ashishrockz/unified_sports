@@ -25,6 +25,9 @@ const { maintenanceCheck } = require("./middlewares/maintenance.middleware");
 
 const app = express();
 
+// Trust proxy on hosted environments (Render, etc.) so express-rate-limit works correctly
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
