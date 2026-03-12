@@ -51,6 +51,8 @@ const getPublicConfig = async () => {
     if (obj.content.forceUpdate) delete obj.content.forceUpdate._id;
   }
   if (obj.branding) delete obj.branding._id;
+  // Never expose integrations (credentials) to public
+  delete obj.integrations;
   if (obj.advertisements) {
     delete obj.advertisements._id;
     if (obj.advertisements.placements) {
@@ -72,7 +74,7 @@ const updateConfig = async (updates, actorId, ip) => {
   const oldVersion = config.version;
 
   // Merge each top-level section
-  const sections = ['maintenance', 'features', 'settings', 'content', 'branding', 'advertisements'];
+  const sections = ['maintenance', 'features', 'settings', 'content', 'branding', 'advertisements', 'integrations'];
   const changes = {};
 
   for (const section of sections) {
@@ -121,6 +123,7 @@ const updateConfig = async (updates, actorId, ip) => {
   config.markModified('content');
   config.markModified('branding');
   config.markModified('advertisements');
+  config.markModified('integrations');
 
   await config.save();
 

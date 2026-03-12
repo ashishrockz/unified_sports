@@ -23,7 +23,8 @@
     "nodemailer": "^6.9.13",
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "twilio": "^5.13.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

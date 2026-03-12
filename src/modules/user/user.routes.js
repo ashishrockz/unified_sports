@@ -6,6 +6,7 @@ const {
   getAllUsersHandler,
   getUserByIdHandler,
   getPlayerStatsHandler,
+  checkAvailabilityHandler,
 } = require('./user.controller');
 
 // ─── Swagger component additions ─────────────────────────────────────────────
@@ -404,6 +405,39 @@ router.get('/profile', protect, getProfileHandler);
  *         $ref: '#/components/responses/Unauthorized'
  */
 router.put('/profile', protect, updateProfileHandler);
+
+/**
+ * @swagger
+ * /api/user/check-availability:
+ *   get:
+ *     summary: Check if a username, phone, or email is available
+ *     tags: [User]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [username, phone, email]
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Availability result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 available:
+ *                   type: boolean
+ */
+router.get('/check-availability', protect, checkAvailabilityHandler);
 
 /**
  * @swagger

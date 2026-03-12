@@ -2,6 +2,7 @@ const jwt         = require('jsonwebtoken');
 const Otp         = require('./otp.model');
 const User        = require('../user/user.model');
 const { sendOtpEmail } = require('../../config/mailer');
+const { sendSms }      = require('../../config/sms');
 const { fail }         = require('../../utils/AppError');
 
 const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
@@ -18,7 +19,15 @@ const sendOtp = async (identifier, type) => {
   await Otp.create({ identifier, type, otp, expiresAt });
 
   if (type === 'phone') {
-    console.log(`[WHATSAPP OTP] Phone: ${identifier} | OTP: ${otp}`);
+    try {
+      const result = await sendSms(identifier, `Your CricCircle OTP is: ${otp}. Valid for 10 minutes.`);
+      if (!result.success) {
+        console.log(`[SMS OTP] Twilio disabled. Phone: ${identifier} | OTP: ${otp}`);
+      }
+    } catch (err) {
+      console.error('[SMS OTP ERROR]', err.message);
+      fail('Failed to send OTP via SMS. Please try again.', 500);
+    }
   } else if (type === 'email') {
     try {
       await sendOtpEmail(identifier, otp);

@@ -33,11 +33,36 @@ const getProfile = async (userId) => {
 };
 
 const updateProfile = async (userId, updates) => {
-  const allowed = ['name', 'avatar'];
+  const allowed = ['name', 'avatar', 'username', 'phone', 'email', 'termsAcceptedAt'];
   const filtered = {};
   allowed.forEach((key) => {
     if (updates[key] !== undefined) filtered[key] = updates[key];
   });
+
+  // Uniqueness checks for username, phone, email
+  const uniqueChecks = [];
+  if (filtered.username) {
+    uniqueChecks.push(
+      User.findOne({ username: filtered.username, _id: { $ne: userId } }).then((existing) => {
+        if (existing) fail('Username is already taken', 409);
+      }),
+    );
+  }
+  if (filtered.phone) {
+    uniqueChecks.push(
+      User.findOne({ phone: filtered.phone, _id: { $ne: userId } }).then((existing) => {
+        if (existing) fail('Phone number is already registered', 409);
+      }),
+    );
+  }
+  if (filtered.email) {
+    uniqueChecks.push(
+      User.findOne({ email: filtered.email.toLowerCase(), _id: { $ne: userId } }).then((existing) => {
+        if (existing) fail('Email is already registered', 409);
+      }),
+    );
+  }
+  if (uniqueChecks.length > 0) await Promise.all(uniqueChecks);
 
   const user = await User.findByIdAndUpdate(userId, filtered, {
     new: true,
@@ -53,6 +78,24 @@ const updateProfile = async (userId, updates) => {
   const obj = user.toObject();
   obj.friendsCount = friendsCount;
   return obj;
+};
+
+/**
+ * Check if a field value is available (not taken by another user).
+ * @param {string} field — 'username', 'phone', or 'email'
+ * @param {string} value — the value to check
+ * @param {string} [excludeUserId] — exclude this user from the check (for edits)
+ */
+const checkAvailability = async (field, value, excludeUserId) => {
+  const validFields = ['username', 'phone', 'email'];
+  if (!validFields.includes(field)) fail('Invalid field', 400);
+  if (!value || !value.trim()) fail('Value is required', 400);
+
+  const query = { [field]: field === 'email' ? value.toLowerCase() : value };
+  if (excludeUserId) query._id = { $ne: excludeUserId };
+
+  const existing = await User.findOne(query).select('_id');
+  return { available: !existing };
 };
 
 /**
@@ -463,4 +506,5 @@ module.exports = {
   getAllUsers,
   getUserById,
   getPlayerStats,
+  checkAvailability,
 };

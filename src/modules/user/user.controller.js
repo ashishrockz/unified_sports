@@ -4,6 +4,7 @@ const {
   getAllUsers,
   getUserById,
   getPlayerStats,
+  checkAvailability,
 } = require('./user.service');
 
 const getProfileHandler = async (req, res, next) => {
@@ -52,10 +53,21 @@ const getPlayerStatsHandler = async (req, res, next) => {
   }
 };
 
+const checkAvailabilityHandler = async (req, res, next) => {
+  try {
+    const { field, value } = req.query;
+    const result = await checkAvailability(field, value, req.user?._id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getProfileHandler,
   updateProfileHandler,
   getAllUsersHandler,
   getUserByIdHandler,
   getPlayerStatsHandler,
+  checkAvailabilityHandler,
 };

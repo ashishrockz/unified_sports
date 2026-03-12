@@ -111,6 +111,25 @@ const appConfigSchema = new mongoose.Schema(
       },
     },
 
+    // ── Integrations (Twilio SMS + SMTP) ──────────────────────
+    integrations: {
+      twilio: {
+        enabled: { type: Boolean, default: false },
+        accountSid: { type: String, default: '' },
+        authToken: { type: String, default: '' },
+        phoneNumber: { type: String, default: '' },
+      },
+      smtp: {
+        enabled: { type: Boolean, default: false },
+        host: { type: String, default: '' },
+        port: { type: Number, default: 587 },
+        secure: { type: Boolean, default: false },
+        user: { type: String, default: '' },
+        pass: { type: String, default: '' },
+        fromEmail: { type: String, default: '' },
+      },
+    },
+
     // ── Metadata ──────────────────────────────────────────────
     lastModifiedBy: {
       type: mongoose.Schema.Types.ObjectId,

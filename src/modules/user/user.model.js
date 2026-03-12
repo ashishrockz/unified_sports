@@ -51,6 +51,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     select: false,
   },
+  termsAcceptedAt: {
+    type: Date,
+    default: null,
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);
