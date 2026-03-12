@@ -28,29 +28,8 @@ const getEnvTransporter = () => {
  * Falls back to env-based transporter if AppConfig SMTP is disabled.
  */
 const getTransporter = async () => {
-  try {
-    const { getConfig } = require('../modules/appConfig/appConfig.service');
-    const config = await getConfig();
-    const smtp = config.integrations?.smtp;
-
-    if (smtp && smtp.enabled && smtp.host && smtp.user && smtp.pass) {
-      return {
-        transporter: nodemailer.createTransport({
-          host: smtp.host,
-          port: smtp.port || 587,
-          secure: smtp.secure || false,
-          auth: {
-            user: smtp.user,
-            pass: smtp.pass,
-          },
-        }),
-        from: smtp.fromEmail || smtp.user,
-      };
-    }
-  } catch (err) {
-    console.warn('[MAILER] Failed to load AppConfig SMTP, using env fallback:', err.message);
-  }
-
+  // Always use env-based SMTP — AppConfig SMTP integration removed to avoid stale DB credentials
+  console.log('[MAILER] Using env SMTP:', smtpHost(), ':', smtpPort(), 'secure:', smtpSecure());
   return { transporter: getEnvTransporter(), from: emailFrom };
 };
 
