@@ -1,42 +1,61 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// ── Fallback transporter from env vars ──────────────────────
-const smtpUser = () => process.env.SMTP_USER || process.env.GMAIL_USER;
-const smtpPass = () => process.env.SMTP_PASS || process.env.GMAIL_PASS;
-const smtpHost = () => process.env.SMTP_HOST || 'smtp.gmail.com';
-const smtpPort = () => parseInt(process.env.SMTP_PORT || '587', 10);
-const smtpSecure = () => (process.env.SMTP_SECURE || 'false') === 'true';
-const emailFrom = process.env.EMAIL_FROM || smtpUser();
+// ── Email provider selection ──────────────────────────────
+// Uses Resend (HTTPS API) when RESEND_API_KEY is set — works on Render/cloud.
+// Falls back to SMTP (nodemailer) for local dev.
+const resendKey = () => process.env.RESEND_API_KEY;
+const emailFrom = () => process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@criccircle.com';
+const appName = () => process.env.APP_NAME || 'CricCircle';
 
-let _envTransporter = null;
-const getEnvTransporter = () => {
-  if (_envTransporter) return _envTransporter;
-  _envTransporter = nodemailer.createTransport({
-    host: smtpHost(),
-    port: smtpPort(),
-    secure: smtpSecure(),
+// ── SMTP fallback ─────────────────────────────────────────
+let _smtpTransporter = null;
+const getSmtpTransporter = () => {
+  if (_smtpTransporter) return _smtpTransporter;
+  _smtpTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.SMTP_SECURE || 'false') === 'true',
     auth: {
-      user: smtpUser(),
-      pass: smtpPass(),
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
   });
-  return _envTransporter;
+  return _smtpTransporter;
 };
 
-/**
- * Build a transporter from AppConfig SMTP settings.
- * Falls back to env-based transporter if AppConfig SMTP is disabled.
- */
-const getTransporter = async () => {
-  // Always use env-based SMTP — AppConfig SMTP integration removed to avoid stale DB credentials
-  console.log('[MAILER] Using env SMTP:', smtpHost(), ':', smtpPort(), 'secure:', smtpSecure());
-  return { transporter: getEnvTransporter(), from: emailFrom };
+// ── Unified send function ─────────────────────────────────
+const sendMail = async ({ to, subject, html, text }) => {
+  if (resendKey()) {
+    const resend = new Resend(resendKey());
+    const { data, error } = await resend.emails.send({
+      from: `${appName()} <${emailFrom()}>`,
+      to,
+      subject,
+      html,
+      text,
+    });
+    if (error) throw new Error(error.message);
+    console.log('[MAILER] Sent via Resend to', to, '| id:', data?.id);
+    return data;
+  }
+
+  // SMTP fallback (local dev)
+  console.log('[MAILER] Sending via SMTP to', to);
+  const info = await getSmtpTransporter().sendMail({
+    from: `"${appName()}" <${emailFrom()}>`,
+    to,
+    subject,
+    html,
+    text,
+  });
+  console.log('[MAILER] Sent via SMTP to', to, '| messageId:', info.messageId);
+  return info;
 };
 
+// ── OTP email ─────────────────────────────────────────────
 const sendOtpEmail = async (to, otp) => {
-  const { transporter, from } = await getTransporter();
-  const appName = process.env.APP_NAME || 'CricCircle';
-
+  const name = appName();
   const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -62,7 +81,7 @@ const sendOtpEmail = async (to, otp) => {
 <body>
   <div class="container">
     <div class="header">
-      <h1>${appName}</h1>
+      <h1>${name}</h1>
       <p>Login Request</p>
     </div>
     <div class="body">
@@ -75,7 +94,7 @@ const sendOtpEmail = async (to, otp) => {
       <p>If you didn't request this, please ignore this email.</p>
     </div>
     <div class="footer">
-      <p>&copy; ${new Date().getFullYear()} ${appName}. All rights reserved.</p>
+      <p>&copy; ${new Date().getFullYear()} ${name}. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -83,21 +102,18 @@ const sendOtpEmail = async (to, otp) => {
 
   const text = `Your Login OTP is: ${otp}\n\nValid for 10 minutes. Do not share this code.`;
 
-  const info = await transporter.sendMail({
-    from: `"${appName}" <${from}>`,
+  await sendMail({
     to,
-    subject: `[${appName}] Your Login OTP: ${otp}`,
+    subject: `[${name}] Your Login OTP: ${otp}`,
     html,
     text,
   });
-  console.log('[EMAIL OTP] Sent to', to, '| messageId:', info.messageId);
 };
 
+// ── Admin emails ──────────────────────────────────────────
 const sendPasswordResetEmail = async (to, token, name) => {
-  const { transporter, from } = await getTransporter();
   const resetUrl = `${process.env.ADMIN_PORTAL_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
-  await transporter.sendMail({
-    from,
+  await sendMail({
     to,
     subject: 'Password Reset — Unified Sports Admin',
     text: `Hi ${name || 'Admin'},\n\nYou requested a password reset. Click the link below to reset your password:\n\n${resetUrl}\n\nThis link is valid for 30 minutes.\n\nIf you didn't request this, please ignore this email.`,
@@ -106,10 +122,8 @@ const sendPasswordResetEmail = async (to, token, name) => {
 };
 
 const sendWelcomeAdminEmail = async (to, name, tempPassword) => {
-  const { transporter, from } = await getTransporter();
   const loginUrl = `${process.env.ADMIN_PORTAL_URL || 'http://localhost:5173'}/login`;
-  await transporter.sendMail({
-    from,
+  await sendMail({
     to,
     subject: 'Welcome to Unified Sports Admin Portal',
     text: `Hi ${name},\n\nYour admin account has been created.\n\nLogin at: ${loginUrl}\nEmail: ${to}\nTemporary password: ${tempPassword}\n\nPlease change your password after first login.`,
@@ -118,14 +132,12 @@ const sendWelcomeAdminEmail = async (to, name, tempPassword) => {
 };
 
 const sendStatusNotificationEmail = async (to, name, status) => {
-  const { transporter, from } = await getTransporter();
   const statusMessages = {
     banned: 'Your account has been banned from Unified Sports.',
     active: 'Your account on Unified Sports has been reactivated.',
     inactive: 'Your account on Unified Sports has been deactivated.',
   };
-  await transporter.sendMail({
-    from,
+  await sendMail({
     to,
     subject: `Account ${status} — Unified Sports`,
     text: `Hi ${name || 'User'},\n\n${statusMessages[status] || `Your account status has been changed to: ${status}`}\n\nIf you believe this is a mistake, please contact support.`,
@@ -133,39 +145,13 @@ const sendStatusNotificationEmail = async (to, name, status) => {
   });
 };
 
-/**
- * Test SMTP connection using AppConfig credentials.
- * @param {string} to - Test email address
- */
 const testSmtpConnection = async (to) => {
-  const { getConfig } = require('../modules/appConfig/appConfig.service');
-  const config = await getConfig();
-  const smtp = config.integrations?.smtp;
-
-  if (!smtp || !smtp.host || !smtp.user || !smtp.pass) {
-    throw new Error('SMTP credentials are incomplete.');
-  }
-
-  const testTransporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port || 587,
-    secure: smtp.secure || false,
-    auth: {
-      user: smtp.user,
-      pass: smtp.pass,
-    },
-  });
-
-  await testTransporter.verify();
-
-  await testTransporter.sendMail({
-    from: smtp.fromEmail || smtp.user,
+  await sendMail({
     to,
     subject: 'CricCircle SMTP Test',
-    text: 'This is a test email. Your SMTP integration is working correctly!',
-    html: '<p>This is a test email. Your <strong>SMTP integration</strong> is working correctly!</p>',
+    text: 'This is a test email. Your email integration is working correctly!',
+    html: '<p>This is a test email. Your <strong>email integration</strong> is working correctly!</p>',
   });
-
   return { success: true };
 };
 
