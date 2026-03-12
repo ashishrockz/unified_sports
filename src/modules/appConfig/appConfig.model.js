@@ -90,13 +90,15 @@ const appConfigSchema = new mongoose.Schema(
       placements: {
         splash: {
           enabled: { type: Boolean, default: false },
-          imageUrl: { type: String, default: '' },
+          mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
+          mediaUrl: { type: String, default: '' },
           linkUrl: { type: String, default: '' },
           sponsorName: { type: String, default: '' },
         },
         homeBanner: {
           enabled: { type: Boolean, default: false },
-          imageUrl: { type: String, default: '' },
+          mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
+          mediaUrl: { type: String, default: '' },
           linkUrl: { type: String, default: '' },
           sponsorName: { type: String, default: '' },
         },
