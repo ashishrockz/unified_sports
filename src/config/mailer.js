@@ -1,17 +1,27 @@
 const nodemailer = require('nodemailer');
 
 // ── Fallback transporter from env vars ──────────────────────
-const gmailUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-const gmailPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
-const emailFrom = process.env.EMAIL_FROM || gmailUser;
+const smtpUser = () => process.env.SMTP_USER || process.env.GMAIL_USER;
+const smtpPass = () => process.env.SMTP_PASS || process.env.GMAIL_PASS;
+const smtpHost = () => process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = () => parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpSecure = () => (process.env.SMTP_SECURE || 'false') === 'true';
+const emailFrom = process.env.EMAIL_FROM || smtpUser();
 
-const envTransporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: gmailUser,
-    pass: gmailPass,
-  },
-});
+let _envTransporter = null;
+const getEnvTransporter = () => {
+  if (_envTransporter) return _envTransporter;
+  _envTransporter = nodemailer.createTransport({
+    host: smtpHost(),
+    port: smtpPort(),
+    secure: smtpSecure(),
+    auth: {
+      user: smtpUser(),
+      pass: smtpPass(),
+    },
+  });
+  return _envTransporter;
+};
 
 /**
  * Build a transporter from AppConfig SMTP settings.
@@ -41,7 +51,7 @@ const getTransporter = async () => {
     console.warn('[MAILER] Failed to load AppConfig SMTP, using env fallback:', err.message);
   }
 
-  return { transporter: envTransporter, from: emailFrom };
+  return { transporter: getEnvTransporter(), from: emailFrom };
 };
 
 const sendOtpEmail = async (to, otp) => {
