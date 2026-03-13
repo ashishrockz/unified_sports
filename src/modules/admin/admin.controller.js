@@ -19,6 +19,7 @@ const {
   forgotPassword,
   resetPassword,
 } = require('./admin.service');
+const { adminAbandonMatch } = require('../match/match.service');
 const { logAction } = require('../auditLog/auditLog.service');
 
 const adminLoginHandler = async (req, res, next) => {
@@ -239,6 +240,16 @@ const resetPasswordHandler = async (req, res, next) => {
   }
 };
 
+const abandonMatchAdminHandler = async (req, res, next) => {
+  try {
+    const match = await adminAbandonMatch(req.params.matchId);
+    logAction({ actor: req.user._id, action: 'match.abandon', targetModel: 'Match', targetId: req.params.matchId, ip: req.ip });
+    res.json({ message: 'Match abandoned by admin', match });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   adminLoginHandler,
   getAllUsersHandler,
@@ -260,4 +271,5 @@ module.exports = {
   uploadAvatarHandler,
   forgotPasswordHandler,
   resetPasswordHandler,
+  abandonMatchAdminHandler,
 };

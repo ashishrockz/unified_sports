@@ -204,6 +204,51 @@ const abandonMatch = async (matchId, userId) => {
   return match;
 };
 
+/** Admin/SuperAdmin abandon — no creator check */
+const adminAbandonMatch = async (matchId) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  if (['completed', 'abandoned'].includes(match.status)) {
+    fail(`Match is already ${match.status}`, 400);
+  }
+  match.status = 'abandoned';
+  match.result = { winner: 'no_result', completedAt: new Date() };
+  room.status   = 'abandoned';
+  await Promise.all([match.save(), room.save()]);
+  ws.emitScoreUpdate(match.roomId, match);
+  return match;
+};
+
+/** Auto-abandon matches created more than 18 hours ago that are still active */
+const autoAbandonStaleMatches = async () => {
+  const cutoff = new Date(Date.now() - 18 * 60 * 60 * 1000); // 18 hours ago
+  const staleMatches = await Match.find({
+    status: { $nin: ['completed', 'abandoned'] },
+    createdAt: { $lt: cutoff },
+  });
+
+  let count = 0;
+  for (const match of staleMatches) {
+    match.status = 'abandoned';
+    match.result = { winner: 'no_result', completedAt: new Date() };
+    await match.save();
+
+    // Also abandon the room
+    const room = await Room.findById(match.roomId);
+    if (room && !['completed', 'abandoned'].includes(room.status)) {
+      room.status = 'abandoned';
+      await room.save();
+    }
+
+    ws.emitScoreUpdate(match.roomId, match);
+    count++;
+  }
+
+  if (count > 0) {
+    console.log(`[AUTO-ABANDON] Abandoned ${count} stale match(es) older than 18 hours`);
+  }
+  return count;
+};
+
 // ── Cricket scoring ───────────────────────────────────────────────────────────
 
 /**
@@ -569,6 +614,8 @@ module.exports = {
   startMatch,
   completeMatch,
   abandonMatch,
+  adminAbandonMatch,
+  autoAbandonStaleMatches,
   setBattingLineup,
   recordBall,
   resumeInnings,

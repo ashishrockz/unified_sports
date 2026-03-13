@@ -24,6 +24,7 @@ const {
   uploadAvatarHandler,
   forgotPasswordHandler,
   resetPasswordHandler,
+  abandonMatchAdminHandler,
 } = require('./admin.controller');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -415,6 +416,41 @@ router.get('/matches', getAllMatchesAdminHandler);
  *         $ref: '#/components/responses/NotFound'
  */
 router.get('/matches/:matchId', getMatchByIdAdminHandler);
+
+/**
+ * @swagger
+ * /api/admin/matches/{matchId}/abandon:
+ *   put:
+ *     summary: Abandon a match (admin action)
+ *     description: >
+ *       Force-abandon a match. Sets match status to `abandoned` and room status to `abandoned`.
+ *       Only works on matches that are not already completed or abandoned.
+ *       Accessible by: **admin**, **superadmin**
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Match abandoned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: Match abandoned by admin }
+ *                 match:
+ *                   $ref: '#/components/schemas/Match'
+ *       400:
+ *         description: Match is already completed or abandoned
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.put('/matches/:matchId/abandon', abandonMatchAdminHandler);
 
 // ── User management ──────────────────────────────────────────────────────────
 
