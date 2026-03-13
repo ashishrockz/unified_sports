@@ -24,3 +24,6 @@ connectDB().then(() => {
     console.log('');
   });
 });
+
+// Export for Vercel serverless
+module.exports = app;
