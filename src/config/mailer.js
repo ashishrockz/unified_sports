@@ -1,14 +1,9 @@
 const nodemailer = require('nodemailer');
-const { Resend } = require('resend');
 
-// ── Email provider selection ──────────────────────────────
-// Uses Resend (HTTPS API) when RESEND_API_KEY is set — works on Render/cloud.
-// Falls back to SMTP (nodemailer) for local dev.
-const resendKey = () => process.env.RESEND_API_KEY;
 const emailFrom = () => process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@criccircle.com';
 const appName = () => process.env.APP_NAME || 'CricCircle';
 
-// ── SMTP fallback ─────────────────────────────────────────
+// ── SMTP transporter ─────────────────────────────────────
 let _smtpTransporter = null;
 const getSmtpTransporter = () => {
   if (_smtpTransporter) return _smtpTransporter;
@@ -24,23 +19,8 @@ const getSmtpTransporter = () => {
   return _smtpTransporter;
 };
 
-// ── Unified send function ─────────────────────────────────
+// ── Send function ─────────────────────────────────────────
 const sendMail = async ({ to, subject, html, text }) => {
-  if (resendKey()) {
-    const resend = new Resend(resendKey());
-    const { data, error } = await resend.emails.send({
-      from: `${appName()} <${emailFrom()}>`,
-      to,
-      subject,
-      html,
-      text,
-    });
-    if (error) throw new Error(error.message);
-    console.log('[MAILER] Sent via Resend to', to, '| id:', data?.id);
-    return data;
-  }
-
-  // SMTP fallback (local dev)
   console.log('[MAILER] Sending via SMTP to', to);
   const info = await getSmtpTransporter().sendMail({
     from: `"${appName()}" <${emailFrom()}>`,

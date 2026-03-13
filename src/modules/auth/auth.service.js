@@ -33,9 +33,11 @@ const sendOtp = async (identifier, type) => {
     }
   } else if (type === 'email') {
     try {
+      console.log('[EMAIL OTP] Sending OTP to', identifier);
       await sendOtpEmail(identifier, otp);
+      console.log('[EMAIL OTP] Successfully sent to', identifier);
     } catch (err) {
-      console.error('[EMAIL OTP ERROR]', err.message);
+      console.error('[EMAIL OTP ERROR]', err.message, err.stack);
       fail('Failed to send OTP email. Please try again.', 500);
     }
   }
