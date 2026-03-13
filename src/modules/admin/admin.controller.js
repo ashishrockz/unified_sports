@@ -20,6 +20,7 @@ const {
   resetPassword,
 } = require('./admin.service');
 const { adminAbandonMatch } = require('../match/match.service');
+const { adminAbandonRoom } = require('../room/room.service');
 const { logAction } = require('../auditLog/auditLog.service');
 
 const adminLoginHandler = async (req, res, next) => {
@@ -250,6 +251,16 @@ const abandonMatchAdminHandler = async (req, res, next) => {
   }
 };
 
+const abandonRoomAdminHandler = async (req, res, next) => {
+  try {
+    const room = await adminAbandonRoom(req.params.roomId);
+    logAction({ actor: req.user._id, action: 'room.abandon', targetModel: 'Room', targetId: req.params.roomId, ip: req.ip });
+    res.json({ message: 'Room abandoned by admin', room });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   adminLoginHandler,
   getAllUsersHandler,
@@ -272,4 +283,5 @@ module.exports = {
   forgotPasswordHandler,
   resetPasswordHandler,
   abandonMatchAdminHandler,
+  abandonRoomAdminHandler,
 };

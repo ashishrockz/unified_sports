@@ -421,6 +421,30 @@ const abandonRoom = async (roomId, creatorId) => {
   return updated;
 };
 
+/** Admin/SuperAdmin abandon — no creator check */
+const adminAbandonRoom = async (roomId) => {
+  const room = await getRoom(roomId);
+  if (['completed', 'abandoned'].includes(room.status)) {
+    fail(`Room is already ${room.status}`, 400);
+  }
+  room.status = 'abandoned';
+  await room.save();
+
+  // Also abandon the associated match if any
+  const Match = require('../match/match.model');
+  const match = await Match.findOne({ roomId: room._id, status: { $nin: ['completed', 'abandoned'] } });
+  if (match) {
+    match.status = 'abandoned';
+    match.result = { winner: 'no_result', completedAt: new Date() };
+    await match.save();
+    ws.emitScoreUpdate(roomId, match);
+  }
+
+  const updated = await getRoom(roomId);
+  ws.emitRoomUpdated(roomId, updated);
+  return updated;
+};
+
 module.exports = {
   createRoom,
   getRooms,
@@ -436,4 +460,5 @@ module.exports = {
   setCaptain,
   setPlayerRole,
   abandonRoom,
+  adminAbandonRoom,
 };

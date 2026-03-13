@@ -25,6 +25,7 @@ const {
   forgotPasswordHandler,
   resetPasswordHandler,
   abandonMatchAdminHandler,
+  abandonRoomAdminHandler,
 } = require('./admin.controller');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,6 +363,41 @@ router.get('/rooms', getAllRoomsAdminHandler);
  *         $ref: '#/components/responses/NotFound'
  */
 router.get('/rooms/:roomId', getRoomByIdAdminHandler);
+
+/**
+ * @swagger
+ * /api/admin/rooms/{roomId}/abandon:
+ *   put:
+ *     summary: Abandon a room (admin action)
+ *     description: >
+ *       Force-abandon a room. Sets room status to `abandoned` and also abandons the associated match if any.
+ *       Only works on rooms that are not already completed or abandoned.
+ *       Accessible by: **admin**, **superadmin**
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Room abandoned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string, example: Room abandoned by admin }
+ *                 room:
+ *                   $ref: '#/components/schemas/Room'
+ *       400:
+ *         description: Room is already completed or abandoned
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.put('/rooms/:roomId/abandon', abandonRoomAdminHandler);
 
 /**
  * @swagger
