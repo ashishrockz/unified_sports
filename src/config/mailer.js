@@ -1,18 +1,9 @@
 const nodemailer = require('nodemailer');
-const { Resend } = require('resend');
 
 const emailFrom = () => process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@criccircle.com';
 const appName = () => process.env.APP_NAME || 'CricCircle';
 
-// ── Resend (HTTPS API — works on Render/cloud) ───────────
-let _resend = null;
-const getResend = () => {
-  if (_resend) return _resend;
-  _resend = new Resend(process.env.RESEND_API_KEY);
-  return _resend;
-};
-
-// ── SMTP fallback (local dev) ─────────────────────────────
+// ── SMTP transporter ─────────────────────────────────────
 let _smtpTransporter = null;
 const getSmtpTransporter = () => {
   if (_smtpTransporter) return _smtpTransporter;
@@ -28,28 +19,9 @@ const getSmtpTransporter = () => {
   return _smtpTransporter;
 };
 
-// ── Unified send function ─────────────────────────────────
-// Uses Resend (HTTPS) when RESEND_API_KEY is set, falls back to SMTP.
+// ── Send function ─────────────────────────────────────────
 const sendMail = async ({ to, subject, html, text }) => {
-  if (process.env.RESEND_API_KEY) {
-    console.log('[MAILER] Sending via Resend to', to);
-    const { data, error } = await getResend().emails.send({
-      from: `${appName()} <${emailFrom()}>`,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-      text,
-    });
-    if (error) {
-      console.error('[MAILER] Resend error:', JSON.stringify(error));
-      throw new Error(error.message);
-    }
-    console.log('[MAILER] Sent via Resend to', to, '| id:', data?.id);
-    return data;
-  }
-
-  // SMTP fallback
-  console.log('[MAILER] Sending via SMTP to', to);
+  console.log('[MAILER] Sending to', to);
   const info = await getSmtpTransporter().sendMail({
     from: `"${appName()}" <${emailFrom()}>`,
     to,
@@ -57,7 +29,7 @@ const sendMail = async ({ to, subject, html, text }) => {
     html,
     text,
   });
-  console.log('[MAILER] Sent via SMTP to', to, '| messageId:', info.messageId);
+  console.log('[MAILER] Sent to', to, '| messageId:', info.messageId);
   return info;
 };
 
