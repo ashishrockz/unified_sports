@@ -128,12 +128,42 @@ const matchSchema = new mongoose.Schema({
   // ── Match state ────────────────────────────────────────────────────────────
   status: {
     type: String,
-    enum: ['not_started', 'active', 'innings_break', 'set_break', 'completed', 'abandoned'],
+    enum: ['not_started', 'active', 'innings_break', 'set_break', 'super_over', 'completed', 'abandoned'],
     default: 'not_started',
+  },
+
+  // Super Over data (cricket tie-breaker)
+  superOver: {
+    innings: [inningsSchema],
+    currentInnings: { type: Number, default: 1 },
+    result: {
+      winner:      { type: String, enum: ['A', 'B', 'draw', null], default: null },
+      margin:      { type: String },
+      completedAt: { type: Date },
+    },
   },
 
   // Config snapshot at match creation
   config: { type: mongoose.Schema.Types.Mixed },
+
+  // Undo stack — snapshots for the last N balls (cricket only)
+  undoStack: [{
+    inningsIdx:      { type: Number },
+    overIndex:       { type: Number },
+    overSnapshot:    { type: mongoose.Schema.Types.Mixed },   // serialised over before mutation
+    inningsTotals:   {
+      totalRuns:      { type: Number },
+      totalWickets:   { type: Number },
+      completedOvers: { type: Number },
+      extras:         { type: mongoose.Schema.Types.Mixed },
+      status:         { type: String },
+    },
+    commentaryLength: { type: Number },
+    matchStatus:      { type: String },
+    currentInnings:   { type: Number },
+    roomStatus:       { type: String },
+    _id: false,
+  }],
 
   // Result
   result: {

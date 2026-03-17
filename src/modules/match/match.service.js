@@ -14,6 +14,7 @@ const {
 } = require('../../utils/commentary');
 
 const MAX_COMMENTARY = 50; // keep last N entries on the match document
+const MAX_UNDO_STACK = 5;  // keep last N ball snapshots for undo
 
 const pushCommentary = (match, entry, extra = {}) => {
   if (!match.commentary) match.commentary = [];
@@ -287,6 +288,29 @@ const recordBall = async (matchId, userId, ballData) => {
   const innings = match.innings[inningsIdx];
   if (!innings || innings.status === 'completed') fail('Innings not active', 400);
 
+  // ── Snapshot for undo ─────────────────────────────────────────────────────
+  const currentOverIdx = innings.overs.findIndex((o) => !o.isComplete);
+  if (!match.undoStack) match.undoStack = [];
+  match.undoStack.push({
+    inningsIdx,
+    overIndex: currentOverIdx >= 0 ? currentOverIdx : innings.overs.length, // next over index if none open
+    overSnapshot: currentOverIdx >= 0 ? JSON.parse(JSON.stringify(innings.overs[currentOverIdx])) : null,
+    inningsTotals: {
+      totalRuns: innings.totalRuns,
+      totalWickets: innings.totalWickets,
+      completedOvers: innings.completedOvers,
+      extras: { ...innings.extras.toObject ? innings.extras.toObject() : innings.extras },
+      status: innings.status,
+    },
+    commentaryLength: (match.commentary || []).length,
+    matchStatus: match.status,
+    currentInnings: match.currentInnings,
+    roomStatus: room.status,
+  });
+  if (match.undoStack.length > MAX_UNDO_STACK) {
+    match.undoStack = match.undoStack.slice(-MAX_UNDO_STACK);
+  }
+
   // Validate batsman belongs to batting team and bowler to bowling team
   const battingPlayers  = innings.battingTeam === 'A' ? match.teamA.players : match.teamB.players;
   const bowlingPlayers  = innings.battingTeam === 'A' ? match.teamB.players : match.teamA.players;
@@ -432,39 +456,95 @@ const recordBall = async (matchId, userId, ballData) => {
       match.currentInnings += 1;
       match.status = 'innings_break';
     } else {
-      // All innings done — auto-complete match
+      // All innings done — auto-complete match or trigger super over
       const scoreA = match.innings.filter((i) => i.battingTeam === 'A').reduce((s, i) => s + i.totalRuns, 0);
       const scoreB = match.innings.filter((i) => i.battingTeam === 'B').reduce((s, i) => s + i.totalRuns, 0);
-      match.status = 'completed';
 
-      let margin = 'Tie';
-      if (scoreA !== scoreB) {
+      if (scoreA === scoreB) {
+        // TIE — trigger super over
+        match.status = 'super_over';
+        match.superOver = initSuperOverData(match);
+        pushCommentary(match, { text: 'Scores level! Match heads to a Super Over!', type: 'milestone' });
+      } else {
+        match.status = 'completed';
+
         const winner = scoreA > scoreB ? 'A' : 'B';
-        // Chasing team (last innings) wins by wickets remaining; first team wins by runs
+        let margin;
         if (innings.battingTeam === winner) {
           const wicketsLeft = battingTeamSlots.length - 1 - innings.totalWickets;
           margin = `${wicketsLeft} wicket${wicketsLeft !== 1 ? 's' : ''}`;
         } else {
           margin = `${Math.abs(scoreA - scoreB)} run${Math.abs(scoreA - scoreB) !== 1 ? 's' : ''}`;
         }
+
+        match.result = { winner, margin, completedAt: new Date() };
+        pushCommentary(match, generateMatchEnd(match.result));
+
+        room.status = 'completed';
+        await room.save();
       }
-
-      match.result = {
-        winner: scoreA > scoreB ? 'A' : scoreB > scoreA ? 'B' : 'draw',
-        margin,
-        completedAt: new Date(),
-      };
-
-      // Match-end commentary
-      pushCommentary(match, generateMatchEnd(match.result));
-
-      room.status = 'completed';
-      await room.save();
     }
   }
 
   match.markModified('innings');
   match.markModified('commentary');
+  match.markModified('undoStack');
+  await match.save();
+  ws.emitScoreUpdate(match.roomId, match);
+  return match;
+};
+
+// ── Undo last ball (cricket) ────────────────────────────────────────────────
+
+const undoLastBall = async (matchId, userId) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  assertCreator(room, userId);
+
+  if (match.sport !== 'cricket') fail('Undo is only available for cricket matches', 400);
+  if (!match.undoStack || match.undoStack.length === 0) fail('Nothing to undo', 400);
+
+  const snapshot = match.undoStack.pop();
+
+  // Restore match-level state
+  match.status = snapshot.matchStatus;
+  match.currentInnings = snapshot.currentInnings;
+
+  // Restore room status (e.g., if match was auto-completed)
+  if (room.status !== snapshot.roomStatus) {
+    room.status = snapshot.roomStatus;
+    await room.save();
+  }
+
+  // Restore innings
+  const innings = match.innings[snapshot.inningsIdx];
+  innings.totalRuns = snapshot.inningsTotals.totalRuns;
+  innings.totalWickets = snapshot.inningsTotals.totalWickets;
+  innings.completedOvers = snapshot.inningsTotals.completedOvers;
+  innings.extras = snapshot.inningsTotals.extras;
+  innings.status = snapshot.inningsTotals.status;
+
+  // Restore or remove the over
+  if (snapshot.overSnapshot) {
+    // Over existed before — restore it
+    innings.overs[snapshot.overIndex] = snapshot.overSnapshot;
+  } else {
+    // Over was created during the ball — remove it
+    innings.overs.splice(snapshot.overIndex, 1);
+  }
+
+  // Trim commentary back
+  if (match.commentary && typeof snapshot.commentaryLength === 'number') {
+    match.commentary = match.commentary.slice(0, snapshot.commentaryLength);
+  }
+
+  // Clear result if match was completed
+  if (snapshot.matchStatus !== 'completed' && match.result && match.result.completedAt) {
+    match.result = { winner: null, margin: undefined, description: undefined, completedAt: undefined };
+  }
+
+  match.markModified('innings');
+  match.markModified('commentary');
+  match.markModified('undoStack');
   await match.save();
   ws.emitScoreUpdate(match.roomId, match);
   return match;
@@ -479,6 +559,289 @@ const resumeInnings = async (matchId, userId) => {
   await match.save();
   ws.emitScoreUpdate(match.roomId, match);
   return match;
+};
+
+// ── Super Over (cricket tie-breaker) ─────────────────────────────────────────
+
+/** Build super over innings data — 2 innings of 1 over each */
+const initSuperOverData = (match) => {
+  // Same batting order as regular match: team that batted 2nd in main match bats first in super over
+  const lastInnings = match.innings[match.innings.length - 1];
+  const firstBat = lastInnings.battingTeam; // chasing team bats first in super over
+
+  return {
+    innings: [
+      { number: 1, battingTeam: firstBat, bowlingTeam: firstBat === 'A' ? 'B' : 'A', overs: [] },
+      { number: 2, battingTeam: firstBat === 'A' ? 'B' : 'A', bowlingTeam: firstBat, overs: [] },
+    ],
+    currentInnings: 1,
+    result: {},
+  };
+};
+
+/**
+ * Record a ball in the super over.
+ * Super over rules: 1 over per innings, 1 wicket = all out (only 2 batsmen).
+ */
+const recordSuperOverBall = async (matchId, userId, ballData) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  assertCreator(room, userId);
+  if (match.sport !== 'cricket') fail('Super over is only available for cricket', 400);
+  assertMatchStatus(match, 'super_over');
+
+  if (!match.superOver || !match.superOver.innings) fail('Super over not initialized', 400);
+
+  const inningsIdx = match.superOver.currentInnings - 1;
+  const innings = match.superOver.innings[inningsIdx];
+  if (!innings || innings.status === 'completed') fail('Super over innings not active', 400);
+
+  const nameMap = buildNameMap(room);
+
+  // Find or create the single over
+  let currentOver = innings.overs[0];
+  if (!currentOver) {
+    innings.overs.push({ overNumber: 1, bowlerId: ballData.bowlerId, balls: [] });
+    currentOver = innings.overs[0];
+  }
+
+  const ball = {
+    ballNumber: currentOver.balls.length + 1,
+    batsmanId: ballData.batsmanId,
+    bowlerId: ballData.bowlerId || currentOver.bowlerId,
+    runs: ballData.runs || 0,
+    isLegal: ballData.isLegal !== false,
+    extras: ballData.extras || {},
+    wicket: ballData.wicket || {},
+  };
+  currentOver.balls.push(ball);
+
+  // Update totals
+  const totalBallRuns = ball.runs + (ball.extras.runs || 0);
+  currentOver.runs += totalBallRuns;
+  if (ball.wicket && ball.wicket.type) currentOver.wickets += 1;
+
+  innings.totalRuns += totalBallRuns;
+  if (ball.wicket && ball.wicket.type) innings.totalWickets += 1;
+
+  if (ball.extras && ball.extras.type) {
+    const eType = ball.extras.type;
+    if (['wide', 'noball', 'bye', 'legbye'].includes(eType)) {
+      innings.extras[eType] = (innings.extras[eType] || 0) + (ball.extras.runs || 0);
+    }
+  }
+
+  // Commentary
+  const batsmanName = nameMap[ball.batsmanId?.toString()] || 'Batsman';
+  const bowlerName = nameMap[ball.bowlerId?.toString()] || 'Bowler';
+  const fielderName = ball.wicket?.fielderId ? (nameMap[ball.wicket.fielderId.toString()] || 'Fielder') : 'Fielder';
+  const legalBalls = currentOver.balls.filter((b) => b.isLegal).length;
+
+  const ballComm = generateBallCommentary(ball, {
+    batsmanName, bowlerName, fielderName,
+    score: innings.totalRuns - totalBallRuns,
+    wickets: innings.totalWickets - (ball.wicket?.type ? 1 : 0),
+    overNumber: 1,
+    ballInOver: legalBalls,
+    inningsNum: `SO-${innings.number}`,
+  });
+  pushCommentary(match, { ...ballComm, text: `[Super Over] ${ballComm.text}` });
+
+  // Super over innings end: 6 legal balls OR wicket (only 2 batsmen, 1 wicket = all out)
+  const isAllOut = innings.totalWickets >= 1;
+  const isOverComplete = legalBalls >= 6;
+
+  if (isAllOut || isOverComplete) {
+    currentOver.isComplete = true;
+    innings.completedOvers = 1;
+    innings.status = 'completed';
+
+    if (match.superOver.currentInnings < 2) {
+      // Move to 2nd super over innings
+      match.superOver.currentInnings = 2;
+      pushCommentary(match, {
+        text: `[Super Over] Innings 1 complete: ${innings.totalRuns} runs. Team ${match.superOver.innings[1].battingTeam} needs ${innings.totalRuns + 1} to win.`,
+        type: 'innings_end',
+      });
+    } else {
+      // Super over complete — determine winner
+      const soScoreA = match.superOver.innings.filter((i) => i.battingTeam === 'A').reduce((s, i) => s + i.totalRuns, 0);
+      const soScoreB = match.superOver.innings.filter((i) => i.battingTeam === 'B').reduce((s, i) => s + i.totalRuns, 0);
+
+      if (soScoreA !== soScoreB) {
+        const winner = soScoreA > soScoreB ? 'A' : 'B';
+        match.superOver.result = { winner, margin: `Super Over (${soScoreA}-${soScoreB})`, completedAt: new Date() };
+        match.status = 'completed';
+        match.result = { winner, margin: `Super Over (${soScoreA}-${soScoreB})`, completedAt: new Date() };
+
+        pushCommentary(match, generateMatchEnd(match.result));
+        room.status = 'completed';
+        await room.save();
+      } else {
+        // Another tie in super over — extremely rare, declare draw
+        match.status = 'completed';
+        match.result = { winner: 'draw', margin: 'Super Over tied', completedAt: new Date() };
+        match.superOver.result = { winner: 'draw', margin: 'Super Over tied', completedAt: new Date() };
+
+        pushCommentary(match, generateMatchEnd(match.result));
+        room.status = 'completed';
+        await room.save();
+      }
+    }
+  }
+
+  // Check if chasing team passes target mid-over (2nd innings)
+  if (inningsIdx === 1 && innings.status !== 'completed') {
+    const firstInningsRuns = match.superOver.innings[0].totalRuns;
+    if (innings.totalRuns > firstInningsRuns) {
+      currentOver.isComplete = true;
+      innings.completedOvers = 1;
+      innings.status = 'completed';
+
+      const winner = innings.battingTeam;
+      match.superOver.result = { winner, margin: `Super Over`, completedAt: new Date() };
+      match.status = 'completed';
+      match.result = { winner, margin: `Super Over`, completedAt: new Date() };
+
+      pushCommentary(match, generateMatchEnd(match.result));
+      room.status = 'completed';
+      await room.save();
+    }
+  }
+
+  match.markModified('superOver');
+  match.markModified('commentary');
+  await match.save();
+  ws.emitScoreUpdate(match.roomId, match);
+  return match;
+};
+
+/** Set lineup for super over innings */
+const setSuperOverLineup = async (matchId, userId, { strikerId, nonStrikerId, bowlerId }) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  assertCreator(room, userId);
+  assertMatchStatus(match, 'super_over');
+
+  if (!match.superOver) fail('Super over not initialized', 400);
+  const idx = match.superOver.currentInnings - 1;
+  const innings = match.superOver.innings[idx];
+  if (!innings) fail('Super over innings not found', 404);
+
+  if (strikerId)    innings.currentBatsmen.striker    = strikerId;
+  if (nonStrikerId) innings.currentBatsmen.nonStriker = nonStrikerId;
+  if (bowlerId)     innings.currentBowler             = bowlerId;
+
+  match.markModified('superOver');
+  await match.save();
+  ws.emitScoreUpdate(match.roomId, match);
+  return match;
+};
+
+// ── Cricket analytics (derived from ball data) ──────────────────────────────
+
+const getPartnerships = async (matchId) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  if (match.sport !== 'cricket') fail('Partnerships are only available for cricket', 400);
+
+  const nameMap = buildNameMap(room);
+  const result = [];
+
+  for (const innings of match.innings) {
+    const partnerships = [];
+    let currentPair = { batsmen: new Set(), runs: 0, balls: 0, batsmanRuns: {} };
+    let runningScore = 0;
+
+    for (const over of innings.overs) {
+      for (const ball of over.balls) {
+        const batId = ball.batsmanId?.toString();
+        if (!batId) continue;
+
+        // Track batsmen in this partnership
+        currentPair.batsmen.add(batId);
+        const totalBallRuns = (ball.runs || 0) + (ball.extras?.runs || 0);
+        currentPair.runs += totalBallRuns;
+        if (ball.isLegal) currentPair.balls += 1;
+        currentPair.batsmanRuns[batId] = (currentPair.batsmanRuns[batId] || 0) + (ball.runs || 0);
+        runningScore += totalBallRuns;
+
+        // Wicket breaks the partnership
+        if (ball.wicket && ball.wicket.type) {
+          const batsmenArr = Array.from(currentPair.batsmen).map((id) => ({
+            slotId: id,
+            name: nameMap[id] || 'Unknown',
+            runs: currentPair.batsmanRuns[id] || 0,
+          }));
+          partnerships.push({
+            batsmen: batsmenArr,
+            totalRuns: currentPair.runs,
+            totalBalls: currentPair.balls,
+            runRate: currentPair.balls > 0 ? parseFloat(((currentPair.runs / currentPair.balls) * 6).toFixed(2)) : 0,
+            endScore: runningScore,
+          });
+          currentPair = { batsmen: new Set(), runs: 0, balls: 0, batsmanRuns: {} };
+        }
+      }
+    }
+
+    // Last unbroken partnership
+    if (currentPair.balls > 0) {
+      const batsmenArr = Array.from(currentPair.batsmen).map((id) => ({
+        slotId: id,
+        name: nameMap[id] || 'Unknown',
+        runs: currentPair.batsmanRuns[id] || 0,
+      }));
+      partnerships.push({
+        batsmen: batsmenArr,
+        totalRuns: currentPair.runs,
+        totalBalls: currentPair.balls,
+        runRate: currentPair.balls > 0 ? parseFloat(((currentPair.runs / currentPair.balls) * 6).toFixed(2)) : 0,
+        endScore: runningScore,
+        notOut: true,
+      });
+    }
+
+    result.push({ inningsNumber: innings.number, battingTeam: innings.battingTeam, partnerships });
+  }
+
+  return { matchId: match._id, innings: result };
+};
+
+const getFallOfWickets = async (matchId) => {
+  const { match, room } = await getMatchAndRoom(matchId);
+  if (match.sport !== 'cricket') fail('Fall of wickets is only available for cricket', 400);
+
+  const nameMap = buildNameMap(room);
+  const result = [];
+
+  for (const innings of match.innings) {
+    const fallOfWickets = [];
+    let runningScore = 0;
+    let wicketNum = 0;
+
+    for (const over of innings.overs) {
+      let legalBallsInOver = 0;
+      for (const ball of over.balls) {
+        runningScore += (ball.runs || 0) + (ball.extras?.runs || 0);
+        if (ball.isLegal) legalBallsInOver += 1;
+
+        if (ball.wicket && ball.wicket.type) {
+          wicketNum += 1;
+          fallOfWickets.push({
+            wicketNumber: wicketNum,
+            score: runningScore,
+            over: `${over.overNumber - 1}.${legalBallsInOver}`,
+            batsmanSlotId: ball.batsmanId?.toString() || null,
+            batsmanName: nameMap[ball.batsmanId?.toString()] || 'Unknown',
+            dismissalType: ball.wicket.type,
+            bowlerName: nameMap[ball.bowlerId?.toString()] || null,
+          });
+        }
+      }
+    }
+
+    result.push({ inningsNumber: innings.number, battingTeam: innings.battingTeam, fallOfWickets });
+  }
+
+  return { matchId: match._id, innings: result };
 };
 
 // ── Racket sport scoring (Tennis / Badminton / Pickleball) ────────────────────
@@ -618,6 +981,11 @@ module.exports = {
   autoAbandonStaleMatches,
   setBattingLineup,
   recordBall,
+  undoLastBall,
+  recordSuperOverBall,
+  setSuperOverLineup,
+  getPartnerships,
+  getFallOfWickets,
   resumeInnings,
   recordPoint,
   resumeSet,

@@ -18,6 +18,7 @@ const Room = require('../modules/room/room.model');
  *   match:score_update    Match document   — ball recorded / point added
  *   match:innings_break   Match document   — cricket innings complete, break
  *   match:innings_resume  Match document   — cricket innings resumed
+ *   match:super_over      Match document   — cricket tie → super over started
  *   match:set_break       Match document   — racket set complete, break
  *   match:set_resume      Match document   — racket set resumed
  *   match:completed       Match document   — final result available
@@ -93,6 +94,7 @@ const emitMatchStarted    = (roomId, match) => broadcast(roomId, 'match:started'
 const emitScoreUpdate     = (roomId, match) => {
   const evt =
     match.status === 'innings_break' ? 'match:innings_break' :
+    match.status === 'super_over'    ? 'match:super_over'    :
     match.status === 'set_break'     ? 'match:set_break'     :
     match.status === 'completed'     ? 'match:completed'     :
     match.status === 'abandoned'     ? 'match:abandoned'     :

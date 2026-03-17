@@ -42,6 +42,36 @@ const ballHandler = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const undoBallHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.undoLastBall(req.params.matchId, req.user._id));
+  } catch (err) { next(err); }
+};
+
+const superOverBallHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.recordSuperOverBall(req.params.matchId, req.user._id, req.body));
+  } catch (err) { next(err); }
+};
+
+const superOverLineupHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.setSuperOverLineup(req.params.matchId, req.user._id, req.body));
+  } catch (err) { next(err); }
+};
+
+const partnershipsHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.getPartnerships(req.params.matchId));
+  } catch (err) { next(err); }
+};
+
+const fallOfWicketsHandler = async (req, res, next) => {
+  try {
+    res.json(await svc.getFallOfWickets(req.params.matchId));
+  } catch (err) { next(err); }
+};
+
 const resumeInningsHandler = async (req, res, next) => {
   try {
     res.json(await svc.resumeInnings(req.params.matchId, req.user._id));
@@ -74,7 +104,9 @@ const getCommentaryHandler = async (req, res, next) => {
 module.exports = {
   getByRoomHandler, getByIdHandler,
   startHandler, completeHandler, abandonHandler,
-  lineupHandler, ballHandler, resumeInningsHandler,
+  lineupHandler, ballHandler, undoBallHandler,
+  superOverBallHandler, superOverLineupHandler,
+  partnershipsHandler, fallOfWicketsHandler, resumeInningsHandler,
   pointHandler, resumeSetHandler,
   getCommentaryHandler,
 };

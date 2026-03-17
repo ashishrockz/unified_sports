@@ -287,6 +287,151 @@ router.post('/:matchId/cricket/ball', ctrl.ballHandler);
 
 /**
  * @swagger
+ * /api/matches/{matchId}/cricket/undo-ball:
+ *   post:
+ *     summary: Undo the last recorded ball
+ *     description: >
+ *       Creator only. Reverts the last ball recorded in cricket, restoring
+ *       over totals, innings totals, commentary, and match/room status.
+ *       Supports up to 5 consecutive undos.
+ *     tags: [Match]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Last ball undone — returns restored match state
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Match'
+ *       400:
+ *         description: Nothing to undo or not a cricket match
+ */
+router.post('/:matchId/cricket/undo-ball', ctrl.undoBallHandler);
+
+/**
+ * @swagger
+ * /api/matches/{matchId}/cricket/partnerships:
+ *   get:
+ *     summary: Get batting partnerships
+ *     description: >
+ *       Returns partnerships per innings, computed from ball-by-ball data.
+ *       Each partnership shows the two batsmen, total runs, balls, run rate,
+ *       and team score when the partnership ended.
+ *     tags: [Match]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Partnership data per innings
+ */
+router.get('/:matchId/cricket/partnerships', ctrl.partnershipsHandler);
+
+/**
+ * @swagger
+ * /api/matches/{matchId}/cricket/fall-of-wickets:
+ *   get:
+ *     summary: Get fall of wickets
+ *     description: >
+ *       Returns fall of wickets per innings — the team score, over, and dismissed
+ *       batsman at the fall of each wicket.
+ *     tags: [Match]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Fall of wickets data per innings
+ */
+router.get('/:matchId/cricket/fall-of-wickets', ctrl.fallOfWicketsHandler);
+
+/**
+ * @swagger
+ * /api/matches/{matchId}/cricket/super-over/lineup:
+ *   post:
+ *     summary: Set super over batting lineup
+ *     description: >
+ *       Creator only. Sets striker, non-striker, and bowler for the current
+ *       super over innings. Only available when match status is `super_over`.
+ *     tags: [Match]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               strikerId:
+ *                 type: string
+ *                 description: Player slot _id of the striker
+ *               nonStrikerId:
+ *                 type: string
+ *                 description: Player slot _id of the non-striker
+ *               bowlerId:
+ *                 type: string
+ *                 description: Player slot _id of the bowler
+ *     responses:
+ *       200:
+ *         description: Super over lineup set
+ */
+router.post('/:matchId/cricket/super-over/lineup', ctrl.superOverLineupHandler);
+
+/**
+ * @swagger
+ * /api/matches/{matchId}/cricket/super-over/ball:
+ *   post:
+ *     summary: Record a delivery in the super over
+ *     description: >
+ *       Creator only. Records a ball in the super over.
+ *       Super over rules: 1 over per innings, 1 wicket = all out (2 batsmen only).
+ *       If the super over also ties, the match is declared a draw.
+ *     tags: [Match]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RecordBallRequest'
+ *     responses:
+ *       200:
+ *         description: Super over ball recorded — returns updated match state
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Match'
+ */
+router.post('/:matchId/cricket/super-over/ball', ctrl.superOverBallHandler);
+
+/**
+ * @swagger
  * /api/matches/{matchId}/cricket/resume-innings:
  *   post:
  *     summary: Resume after innings break
