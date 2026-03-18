@@ -1,7 +1,7 @@
 # Unified Sports Platform — Business Analyst Documentation
 
-**Version:** 1.0
-**Last Updated:** 2026-03-03
+**Version:** 1.1
+**Last Updated:** 2026-03-18
 **Platform:** Multi-sport match management system
 **Sports Supported:** Cricket, Tennis, Badminton, Pickleball
 
@@ -842,7 +842,7 @@ active ──[deactivate]──> inactive ──[activate]──> active
 | Admin | 20 | User management + oversight |
 | SuperAdmin | 7 | Admin management |
 | AuditLog | 1 | Activity tracking |
-| Analytics | 1 | Platform trends |
+| Analytics | 6 | Platform trends, engagement, growth, match analytics, revenue |
 | Leaderboards | 4 | Player rankings |
 | Highlights | 1 | Match highlights |
 | WebSocket | — | Real-time events (12 events) |
@@ -868,15 +868,74 @@ active ──[deactivate]──> inactive ──[activate]──> active
 ### Platform Totals
 | Metric | Count |
 |--------|-------|
-| REST API Endpoints | 88 |
+| REST API Endpoints | 93 |
 | WebSocket Events | 12 (10 server→client, 2 client→server) |
-| Database Models | 7 (User, Room, Match, Friend, SportType, AuditLog, OTP) |
+| Database Models | 8 (User, Room, Match, Friend, SportType, AuditLog, OTP, PasswordResetToken) |
 | Admin Panel Pages | 13 |
 | Sports Supported | 4 (Cricket, Tennis, Badminton, Pickleball) |
 | User Roles | 3 (User, Admin, SuperAdmin) |
 
 ---
 
-*Documentation generated for Unified Sports Platform v1.0*
+## 13. v1.1 Changelog (2026-03-18)
+
+### Fixes Applied
+| Issue | Severity | Resolution |
+|-------|----------|------------|
+| Analytics page called 4 non-existent backend endpoints (`/engagement`, `/platform-summary`, `/growth`, `/revenue`) | **Critical** | Added all 4 endpoints + a 5th (`/match-analytics`) with Swagger docs |
+| Password reset tokens stored in-memory (`Map()`) — lost on restart | **Critical** | Created `PasswordResetToken` MongoDB model with TTL auto-expiry |
+| Admin dashboard showed only 4 user count cards | **Enhancement** | Added match stats, pie chart, recent signups table, recent matches table |
+
+### New Analytics Endpoints (5 added)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/analytics/platform-summary` | Total users, matches, rooms, sport types |
+| `GET /api/analytics/engagement` | Active users, matches per user, avg session duration |
+| `GET /api/analytics/growth` | Period-over-period growth rates for users & matches |
+| `GET /api/analytics/revenue` | Revenue stub (placeholder for payment integration) |
+| `GET /api/analytics/match-analytics` | Completion/abandon rates, avg duration by sport, peak usage hours |
+
+### Enhanced Admin Dashboard
+- **Match stats section:** total, completed, active, abandoned counts
+- **Match status pie chart:** visual breakdown of match outcomes
+- **Recent signups table:** last 10 user registrations with status badges
+- **Recent matches table:** last 10 matches with sport, room, status, date
+
+---
+
+## 14. Known Gaps & Recommendations for Admin/Stakeholders
+
+### What's Production-Ready
+1. Complete multi-sport scoring engine (ball-by-ball cricket, point-by-point racket)
+2. Robust RBAC with User/Admin/SuperAdmin role hierarchy
+3. Real-time WebSocket events for live match updates
+4. Comprehensive audit logging of all admin actions
+5. 93 documented API endpoints with Swagger
+6. Mobile app with 10-language i18n support
+7. Friend system with full request lifecycle
+8. App configuration (maintenance mode, announcements, SMTP/SMS testing)
+
+### Remaining Gaps (Priority Order)
+| # | Gap | Impact | Effort |
+|---|-----|--------|--------|
+| 1 | **No automated tests** — 0 backend tests, 0 frontend tests | High risk of regressions | Medium |
+| 2 | **No push notifications** — no FCM/APNs integration | Users miss updates when app is closed | Medium |
+| 3 | **No user reporting/flagging** — no moderation workflow | Can't handle misconduct reports | Medium |
+| 4 | **No CI/CD pipeline** — no automated deploy or quality gates | Manual error-prone deployments | Low-Medium |
+| 5 | **File storage is local** — uploads on disk, not cloud (S3/Cloudinary) | Not scalable for multi-instance | Low |
+| 6 | **No payment/subscription system** — revenue hook is a stub | No monetization | High (scope) |
+| 7 | **No analytics data export** — no PDF reports for stakeholders | Manual reporting | Low |
+| 8 | **No WebSocket rate limiting** — potential abuse vector | Security risk | Low |
+| 9 | **No admin activity summary** — audit logs exist but no visual dashboard | Harder to track admin performance | Low |
+
+### Quick Wins (High visibility, low effort)
+- Add unit tests for scoring engine (highest business value code)
+- Add Firebase Cloud Messaging for match result notifications
+- Add CSV/PDF export button to analytics page
+- Add admin activity summary cards on audit logs page
+
+---
+
+*Documentation generated for Unified Sports Platform v1.1*
 *Swagger UI available at: `/api/docs`*
 *OpenAPI JSON spec at: `/api/docs.json`*

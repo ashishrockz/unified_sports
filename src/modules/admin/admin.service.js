@@ -4,6 +4,7 @@ const jwt    = require('jsonwebtoken');
 const User   = require('../user/user.model');
 const Room   = require('../room/room.model');
 const Match  = require('../match/match.model');
+const PasswordResetToken = require('./passwordResetToken.model');
 const { fail } = require('../../utils/AppError');
 const { escapeRegex } = require('../../utils/sanitize');
 
@@ -164,18 +165,31 @@ const changePassword = async (userId, currentPassword, newPassword) => {
 // ── Admin dashboard ──────────────────────────────────────────────────────────
 
 /**
- * Dashboard stats for admin role — user counts only.
+ * Dashboard stats for admin role — user counts + match stats + recent activity.
  */
 const getAdminDashboard = async () => {
-  const [totalUsers, activeUsers, inactiveUsers, bannedUsers] = await Promise.all([
+  const [totalUsers, activeUsers, inactiveUsers, bannedUsers,
+         totalMatches, completedMatches, activeMatches, abandonedMatches,
+         recentUsers, recentMatches, recentRooms] = await Promise.all([
     User.countDocuments({ role: 'user' }),
     User.countDocuments({ role: 'user', status: 'active' }),
     User.countDocuments({ role: 'user', status: 'inactive' }),
     User.countDocuments({ role: 'user', status: 'banned' }),
+    Match.countDocuments(),
+    Match.countDocuments({ status: 'completed' }),
+    Match.countDocuments({ status: 'active' }),
+    Match.countDocuments({ status: 'abandoned' }),
+    User.find({ role: 'user' }).select('name username email avatar status createdAt').sort({ createdAt: -1 }).limit(10).lean(),
+    Match.find().populate('roomId', 'name').sort({ createdAt: -1 }).limit(10).lean(),
+    Room.find().populate('creator', 'name username avatar').populate('sportTypeId', 'name sport').sort({ createdAt: -1 }).limit(10).lean(),
   ]);
 
   return {
     users: { total: totalUsers, active: activeUsers, inactive: inactiveUsers, banned: bannedUsers },
+    matches: { total: totalMatches, completed: completedMatches, active: activeMatches, abandoned: abandonedMatches },
+    recentUsers,
+    recentMatches,
+    recentRooms,
   };
 };
 
@@ -318,11 +332,9 @@ const updateAvatar = async (userId, avatarPath) => {
 
 // ── Forgot / Reset password ─────────────────────────────────────────────────
 
-// Simple in-memory store for reset tokens (in production, use Redis or DB)
-const resetTokens = new Map();
-
 /**
  * Generate a password reset token and send it via email.
+ * Tokens are stored in MongoDB with a TTL index for automatic expiry.
  */
 const forgotPassword = async (email) => {
   if (!email) fail('Email is required', 400);
@@ -335,15 +347,13 @@ const forgotPassword = async (email) => {
   // Don't reveal whether the email exists
   if (!user) return { message: 'If that email is registered, a reset link has been sent' };
 
+  // Remove any existing tokens for this user
+  await PasswordResetToken.deleteMany({ userId: user._id });
+
   const token = crypto.randomBytes(32).toString('hex');
-  const expiry = Date.now() + 30 * 60 * 1000; // 30 minutes
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-  resetTokens.set(token, { userId: user._id.toString(), expiry });
-
-  // Clean up expired tokens
-  for (const [key, val] of resetTokens) {
-    if (val.expiry < Date.now()) resetTokens.delete(key);
-  }
+  await PasswordResetToken.create({ userId: user._id, token, expiresAt });
 
   try {
     const { sendPasswordResetEmail } = require('../../config/mailer');
@@ -363,8 +373,8 @@ const resetPassword = async (token, newPassword) => {
   if (!token || !newPassword) fail('Token and new password are required', 400);
   if (newPassword.length < 6) fail('Password must be at least 6 characters', 400);
 
-  const record = resetTokens.get(token);
-  if (!record || record.expiry < Date.now()) {
+  const record = await PasswordResetToken.findOne({ token, expiresAt: { $gt: new Date() } });
+  if (!record) {
     fail('Invalid or expired reset token', 400);
   }
 
@@ -374,7 +384,7 @@ const resetPassword = async (token, newPassword) => {
   user.password = await bcrypt.hash(newPassword, 12);
   await user.save();
 
-  resetTokens.delete(token);
+  await PasswordResetToken.deleteOne({ _id: record._id });
 
   return { message: 'Password has been reset successfully' };
 };
