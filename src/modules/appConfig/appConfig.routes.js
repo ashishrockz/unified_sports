@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { protect } = require('../../middlewares/auth.middleware');
-const { requireAdmin } = require('../../middlewares/admin.middleware');
+const { requirePermission } = require('../../middlewares/admin.middleware');
 const {
   getPublicConfigHandler,
   getAdminConfigHandler,
@@ -12,14 +12,14 @@ const {
 // Public — mobile app fetches config on startup
 router.get('/', getPublicConfigHandler);
 
-// Admin-only — full config with metadata
-router.get('/admin', protect, requireAdmin, getAdminConfigHandler);
+// Staff with settings.read — full config with metadata
+router.get('/admin', protect, requirePermission('settings.read'), getAdminConfigHandler);
 
-// Admin-only — partial section updates
-router.put('/', protect, requireAdmin, updateConfigHandler);
+// Staff with settings.update — partial section updates
+router.put('/', protect, requirePermission('settings.update'), updateConfigHandler);
 
-// Admin-only — test integrations
-router.post('/test-sms', protect, requireAdmin, testSmsHandler);
-router.post('/test-smtp', protect, requireAdmin, testSmtpHandler);
+// Staff with system_config permissions — test integrations
+router.post('/test-sms', protect, requirePermission('system_config.update'), testSmsHandler);
+router.post('/test-smtp', protect, requirePermission('system_config.update'), testSmtpHandler);
 
 module.exports = router;

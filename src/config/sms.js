@@ -10,12 +10,10 @@ const sendSms = async (to, body) => {
   const { twilio } = config.integrations || {};
 
   if (!twilio || !twilio.enabled) {
-    console.log(`[SMS] Twilio disabled. To: ${to} | Body: ${body}`);
     return { success: false, reason: 'Twilio not enabled' };
   }
 
   if (!twilio.accountSid || !twilio.authToken || !twilio.phoneNumber) {
-    console.log(`[SMS] Twilio credentials incomplete. To: ${to} | Body: ${body}`);
     return { success: false, reason: 'Twilio credentials incomplete' };
   }
 
@@ -27,7 +25,6 @@ const sendSms = async (to, body) => {
     to,
   });
 
-  console.log(`[SMS] Sent to ${to} | SID: ${message.sid}`);
   return { success: true, sid: message.sid };
 };
 

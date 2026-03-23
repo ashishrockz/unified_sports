@@ -2,7 +2,12 @@ const svc = require('./room.service');
 
 const createHandler = async (req, res, next) => {
   try {
-    const room = await svc.createRoom(req.user._id, req.body);
+    // Use sportTypeId from body, fall back to x-sport-type-id header
+    const payload = { ...req.body };
+    if (!payload.sportTypeId && req.headers['x-sport-type-id']) {
+      payload.sportTypeId = req.headers['x-sport-type-id'];
+    }
+    const room = await svc.createRoom(req.user._id, payload);
     res.status(201).json(room);
   } catch (err) { next(err); }
 };
@@ -10,7 +15,8 @@ const createHandler = async (req, res, next) => {
 const getAllHandler = async (req, res, next) => {
   try {
     const { status, sportTypeId, page, limit } = req.query;
-    res.json(await svc.getRooms({ userId: req.user._id, status, sportTypeId, page, limit }));
+    const resolvedSportTypeId = sportTypeId || req.headers['x-sport-type-id'];
+    res.json(await svc.getRooms({ userId: req.user._id, status, sportTypeId: resolvedSportTypeId, page, limit }));
   } catch (err) { next(err); }
 };
 

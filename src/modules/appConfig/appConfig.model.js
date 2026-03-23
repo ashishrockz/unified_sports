@@ -18,7 +18,7 @@ const appConfigSchema = new mongoose.Schema(
           'We are performing scheduled maintenance. Please try again later.',
       },
       allowedRoles: [
-        { type: String, enum: ['admin', 'superadmin'] },
+        { type: String, enum: ['super_admin', 'admin', 'manager', 'editor', 'viewer'] },
       ],
       estimatedEndTime: { type: Date, default: null },
     },
@@ -82,6 +82,15 @@ const appConfigSchema = new mongoose.Schema(
       primaryColor: { type: String, default: '' },
       accentColor: { type: String, default: '' },
       logoUrl: { type: String, default: '' },
+      splashScreen: {
+        enabled: { type: Boolean, default: false },
+        mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
+        mediaUrl: { type: String, default: '' },
+        durationSeconds: { type: Number, default: 10, min: 10, max: 20 },
+        backgroundColor: { type: String, default: '#FFFFFF' },
+        showAppName: { type: Boolean, default: true },
+        showTagline: { type: Boolean, default: true },
+      },
     },
 
     // ── Advertisements / Sponsors ─────────────────────────────
@@ -109,6 +118,17 @@ const appConfigSchema = new mongoose.Schema(
           tagline: { type: String, default: '' },
         },
       },
+      // ── AdMob / Network Ads ───────────────────────────────
+      admob: {
+        enabled: { type: Boolean, default: false },
+        units: [{
+          unitId:    { type: String, required: true },
+          adType:    { type: String, enum: ['banner', 'interstitial', 'rewarded'], required: true },
+          placement: { type: String, enum: ['home', 'toss', 'match_detail', 'leaderboard', 'room_list', 'scoring', 'innings_break'], required: true },
+          enabled:   { type: Boolean, default: true },
+          label:     { type: String, default: '' },
+        }],
+      },
     },
 
     // ── Integrations (Twilio SMS + SMTP) ──────────────────────
@@ -127,6 +147,12 @@ const appConfigSchema = new mongoose.Schema(
         user: { type: String, default: '' },
         pass: { type: String, default: '' },
         fromEmail: { type: String, default: '' },
+      },
+      cloudinary: {
+        enabled: { type: Boolean, default: false },
+        cloudName: { type: String, default: '' },
+        apiKey: { type: String, default: '' },
+        apiSecret: { type: String, default: '' },
       },
     },
 

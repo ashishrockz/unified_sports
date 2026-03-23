@@ -1,6 +1,6 @@
 const router = require('express').Router();
-const { protect }          = require('../../middlewares/auth.middleware');
-const { requireSuperAdmin } = require('../../middlewares/admin.middleware');
+const { protect }            = require('../../middlewares/auth.middleware');
+const { requireSuperAdmin }  = require('../../middlewares/admin.middleware');
 const {
   createAdminHandler,
   getAllAdminsHandler,
@@ -55,7 +55,7 @@ router.use(protect, requireSuperAdmin);
  *           nullable: true
  *         role:
  *           type: string
- *           enum: [user, admin, superadmin]
+ *           enum: [user, super_admin, admin, manager, editor, viewer]
  *           example: admin
  *         status:
  *           type: string

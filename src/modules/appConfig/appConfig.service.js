@@ -50,7 +50,10 @@ const getPublicConfig = async () => {
     if (obj.content.announcement) delete obj.content.announcement._id;
     if (obj.content.forceUpdate) delete obj.content.forceUpdate._id;
   }
-  if (obj.branding) delete obj.branding._id;
+  if (obj.branding) {
+    delete obj.branding._id;
+    if (obj.branding.splashScreen) delete obj.branding.splashScreen._id;
+  }
   // Never expose integrations (credentials) to public
   delete obj.integrations;
   if (obj.advertisements) {
@@ -60,6 +63,16 @@ const getPublicConfig = async () => {
       if (obj.advertisements.placements.splash) delete obj.advertisements.placements.splash._id;
       if (obj.advertisements.placements.homeBanner) delete obj.advertisements.placements.homeBanner._id;
       if (obj.advertisements.placements.tossScreen) delete obj.advertisements.placements.tossScreen._id;
+    }
+    // Clean up AdMob units _id fields
+    if (obj.advertisements.admob) {
+      delete obj.advertisements.admob._id;
+      if (Array.isArray(obj.advertisements.admob.units)) {
+        obj.advertisements.admob.units = obj.advertisements.admob.units.map((u) => {
+          const { _id, ...rest } = u;
+          return rest;
+        });
+      }
     }
   }
 
@@ -82,21 +95,31 @@ const updateConfig = async (updates, actorId, ip) => {
       changes[section] = {};
       for (const [field, value] of Object.entries(updates[section])) {
         if (config[section] && config[section][field] !== undefined) {
-          // For nested objects (announcement, forceUpdate), merge deeper
-          if (
+          // Arrays should be replaced wholesale (e.g. admob.units)
+          if (Array.isArray(value)) {
+            changes[section][field] = { from: config[section][field], to: value };
+            config[section][field] = value;
+          }
+          // For nested objects (announcement, forceUpdate, admob), merge deeper
+          else if (
             typeof value === 'object' &&
             value !== null &&
-            !Array.isArray(value) &&
             typeof config[section][field] === 'object'
           ) {
             for (const [subKey, subVal] of Object.entries(value)) {
-              if (config[section][field][subKey] !== subVal) {
+              // Nested arrays (e.g. admob.units) are replaced wholesale
+              if (Array.isArray(subVal)) {
+                changes[section][`${field}.${subKey}`] = { from: config[section][field][subKey], to: subVal };
+                config[section][field][subKey] = subVal;
+              } else if (config[section][field][subKey] !== subVal) {
                 changes[section][`${field}.${subKey}`] = {
                   from: config[section][field][subKey],
                   to: subVal,
                 };
+                config[section][field][subKey] = subVal;
+              } else {
+                config[section][field][subKey] = subVal;
               }
-              config[section][field][subKey] = subVal;
             }
           } else {
             if (config[section][field] !== value) {

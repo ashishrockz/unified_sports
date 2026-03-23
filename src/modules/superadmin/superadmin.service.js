@@ -5,18 +5,22 @@ const Match     = require('../match/match.model');
 const SportType = require('../sportType/sportType.model');
 const { fail }  = require('../../utils/AppError');
 const { escapeRegex } = require('../../utils/sanitize');
+const { STAFF_ROLES } = require('../../config/permissions');
 
 const ADMIN_FIELDS = 'name username email phone avatar role status createdAt updatedAt';
+
+// Staff roles that can be created (super_admin cannot be created via API)
+const CREATABLE_ROLES = ['admin', 'manager', 'editor', 'viewer'];
 
 // ── Admin (employee) management — superadmin only ────────────────────────────
 
 /**
- * Create a new admin or superadmin (employee) account.
+ * Create a new staff account.
  *
  * Rules:
  *  - email must be unique
  *  - password is hashed before storage
- *  - role defaults to 'admin', can be set to 'superadmin'
+ *  - role can be: admin, manager, editor, viewer (NOT super_admin)
  *  - status starts as 'active'
  */
 const createAdmin = async ({ name, email, password, role = 'admin' }) => {
@@ -24,8 +28,8 @@ const createAdmin = async ({ name, email, password, role = 'admin' }) => {
     fail('name, email, and password are required', 400);
   }
 
-  if (!['admin', 'superadmin'].includes(role)) {
-    fail('role must be either admin or superadmin', 400);
+  if (!CREATABLE_ROLES.includes(role)) {
+    fail(`role must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   }
 
   const existing = await User.findOne({ email: email.toLowerCase() });
@@ -49,10 +53,10 @@ const createAdmin = async ({ name, email, password, role = 'admin' }) => {
 };
 
 /**
- * List all admin (employee) accounts with optional search and status filter.
+ * List all staff accounts with optional search, role filter, and status filter.
  */
-const getAllAdmins = async ({ search = '', status = '', page = 1, limit = 20 } = {}) => {
-  const filter = { role: { $in: ['admin', 'superadmin'] } };
+const getAllAdmins = async ({ search = '', status = '', role = '', page = 1, limit = 20 } = {}) => {
+  const filter = { role: { $in: STAFF_ROLES } };
 
   if (search.trim()) {
     const regex = new RegExp(escapeRegex(search.trim()), 'i');
@@ -60,6 +64,9 @@ const getAllAdmins = async ({ search = '', status = '', page = 1, limit = 20 } =
   }
   if (['active', 'inactive'].includes(status)) {
     filter.status = status;
+  }
+  if (role && STAFF_ROLES.includes(role)) {
+    filter.role = role;
   }
 
   const [admins, total] = await Promise.all([
@@ -83,19 +90,19 @@ const getAllAdmins = async ({ search = '', status = '', page = 1, limit = 20 } =
 };
 
 /**
- * Get a single admin's full profile.
+ * Get a single staff member's full profile.
  */
 const getAdminById = async (adminId) => {
-  const admin = await User.findOne({ _id: adminId, role: { $in: ['admin', 'superadmin'] } }).select(ADMIN_FIELDS);
+  const admin = await User.findOne({ _id: adminId, role: { $in: STAFF_ROLES } }).select(ADMIN_FIELDS);
   if (!admin) fail('Admin not found', 404);
   return admin;
 };
 
 /**
- * Core helper for activating or deactivating an admin account.
+ * Core helper for activating or deactivating a staff account.
  *
  * Rules:
- *  - Cannot change a superadmin's status
+ *  - Cannot change a super_admin's status
  *  - Cannot act on self
  *  - Cannot set a status that is already set
  */
@@ -107,11 +114,11 @@ const changeAdminStatus = async (superAdminId, adminId, newStatus) => {
   const admin = await User.findById(adminId);
   if (!admin) fail('Admin not found', 404);
 
-  if (admin.role === 'superadmin') {
+  if (admin.role === 'super_admin') {
     fail('Super admin account cannot be modified', 403);
   }
-  if (admin.role !== 'admin') {
-    fail('Target is not an admin account', 400);
+  if (!STAFF_ROLES.includes(admin.role)) {
+    fail('Target is not a staff account', 400);
   }
   if (admin.status === newStatus) {
     fail(`Admin account is already ${newStatus}`, 409);
@@ -129,10 +136,10 @@ const deactivateAdmin = (superAdminId, adminId) =>
   changeAdminStatus(superAdminId, adminId, 'inactive');
 
 /**
- * Permanently delete an admin (employee) account.
+ * Permanently delete a staff account.
  *
  * Rules:
- *  - Cannot remove a superadmin
+ *  - Cannot remove a super_admin
  *  - Cannot remove yourself
  */
 const removeAdmin = async (superAdminId, adminId) => {
@@ -143,11 +150,11 @@ const removeAdmin = async (superAdminId, adminId) => {
   const admin = await User.findById(adminId);
   if (!admin) fail('Admin not found', 404);
 
-  if (admin.role === 'superadmin') {
+  if (admin.role === 'super_admin') {
     fail('Super admin account cannot be deleted', 403);
   }
-  if (admin.role !== 'admin') {
-    fail('Target is not an admin account', 400);
+  if (!STAFF_ROLES.includes(admin.role)) {
+    fail('Target is not a staff account', 400);
   }
 
   await admin.deleteOne();
@@ -169,9 +176,9 @@ const getDashboardStats = async () => {
     User.countDocuments({ role: 'user', status: 'active' }),
     User.countDocuments({ role: 'user', status: 'inactive' }),
     User.countDocuments({ role: 'user', status: 'banned' }),
-    User.countDocuments({ role: { $in: ['admin', 'superadmin'] } }),
-    User.countDocuments({ role: { $in: ['admin', 'superadmin'] }, status: 'active' }),
-    User.countDocuments({ role: { $in: ['admin', 'superadmin'] }, status: 'inactive' }),
+    User.countDocuments({ role: { $in: STAFF_ROLES } }),
+    User.countDocuments({ role: { $in: STAFF_ROLES }, status: 'active' }),
+    User.countDocuments({ role: { $in: STAFF_ROLES }, status: 'inactive' }),
     Room.countDocuments(),
     Room.countDocuments({ status: 'active' }),
     Room.countDocuments({ status: 'completed' }),
@@ -186,7 +193,7 @@ const getDashboardStats = async () => {
     admins:     { total: totalAdmins,  active: activeAdmins,  inactive: inactiveAdmins },
     rooms:      { total: totalRooms,   active: activeRooms,   completed: completedRooms },
     matches:    { total: totalMatches, active: activeMatches, completed: completedMatches },
-    sportTypes: { total: totalSportTypes },
+    sportTypes: totalSportTypes,
   };
 };
 

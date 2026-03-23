@@ -121,7 +121,7 @@ const options = {
             avatar:    { type: 'string', example: 'https://cdn.example.com/avatar.jpg' },
             role: {
               type: 'string',
-              enum: ['user', 'admin', 'superadmin'],
+              enum: ['user', 'super_admin', 'admin', 'manager', 'editor', 'viewer'],
               example: 'user',
             },
             status: {

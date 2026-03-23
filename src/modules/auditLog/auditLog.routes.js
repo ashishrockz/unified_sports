@@ -1,9 +1,9 @@
 const router = require('express').Router();
 const { protect } = require('../../middlewares/auth.middleware');
-const { requireSuperAdmin } = require('../../middlewares/admin.middleware');
+const { requirePermission } = require('../../middlewares/admin.middleware');
 const { getAuditLogsHandler } = require('./auditLog.controller');
 
-router.use(protect, requireSuperAdmin);
+router.use(protect, requirePermission('audit_logs.read'));
 
 /**
  * @swagger

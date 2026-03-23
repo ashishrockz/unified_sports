@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { protect } = require('../../middlewares/auth.middleware');
-const { requireAdmin } = require('../../middlewares/admin.middleware');
+const { requirePermission } = require('../../middlewares/admin.middleware');
 const {
   getTrendsHandler,
   getPlatformSummaryHandler,
@@ -10,7 +10,7 @@ const {
   getMatchAnalyticsHandler,
 } = require('./analytics.controller');
 
-router.use(protect, requireAdmin);
+router.use(protect, requirePermission('reports.read'));
 
 /**
  * @swagger

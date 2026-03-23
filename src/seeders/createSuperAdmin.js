@@ -34,7 +34,7 @@ const run = async () => {
   const password =  process.env.SUPERADMIN_PASSWORD || 'SuperAdmin@123';
 
   // Ensure only one superadmin exists
-  const existing = await User.findOne({ role: 'superadmin' });
+  const existing = await User.findOne({ role: 'super_admin' });
   if (existing) {
     console.log('ℹ️   Super admin already exists:');
     console.log('    Email :', existing.email);
@@ -49,7 +49,7 @@ const run = async () => {
     name,
     email,
     password: hashedPassword,
-    role:     'superadmin',
+    role:     'super_admin',
     status:   'active',
   });
 

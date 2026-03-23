@@ -1,6 +1,6 @@
 const router = require('express').Router();
-const { protect }      = require('../../middlewares/auth.middleware');
-const { requireAdmin } = require('../../middlewares/admin.middleware');
+const { protect }            = require('../../middlewares/auth.middleware');
+const { requirePermission }  = require('../../middlewares/admin.middleware');
 const ctrl = require('./sportType.controller');
 
 /**
@@ -183,7 +183,7 @@ router.get('/:sportTypeId', ctrl.getByIdHandler);
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.post('/', protect, requireAdmin, ctrl.createHandler);
+router.post('/', protect, requirePermission('sport_types.create'), ctrl.createHandler);
 
 /**
  * @swagger
@@ -211,7 +211,7 @@ router.post('/', protect, requireAdmin, ctrl.createHandler);
  *             schema:
  *               $ref: '#/components/schemas/SportType'
  */
-router.put('/:sportTypeId', protect, requireAdmin, ctrl.updateHandler);
+router.put('/:sportTypeId', protect, requirePermission('sport_types.update'), ctrl.updateHandler);
 
 /**
  * @swagger
@@ -234,6 +234,6 @@ router.put('/:sportTypeId', protect, requireAdmin, ctrl.updateHandler);
  *             schema:
  *               $ref: '#/components/schemas/MessageResponse'
  */
-router.delete('/:sportTypeId', protect, requireAdmin, ctrl.deleteHandler);
+router.delete('/:sportTypeId', protect, requirePermission('sport_types.delete'), ctrl.deleteHandler);
 
 module.exports = router;

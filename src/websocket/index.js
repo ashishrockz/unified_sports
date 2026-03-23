@@ -60,6 +60,9 @@ const init = (httpServer) => {
   io.on('connection', (socket) => {
     const user = socket.user;
 
+    // Auto-join the user's personal notification channel
+    socket.join(`user:${user._id}`);
+
     // Join a match room's real-time channel
     socket.on('join_room', async ({ roomId }) => {
       try {
@@ -102,6 +105,16 @@ const emitScoreUpdate     = (roomId, match) => {
   broadcast(roomId, evt, match);
 };
 
+/**
+ * Send a notification to a specific user's personal channel.
+ * @param {string} userId — recipient's user ID
+ * @param {Object} notification — populated notification document
+ */
+const emitNotification = (userId, notification) => {
+  if (!io) return;
+  io.to(`user:${userId}`).emit('notification', notification);
+};
+
 const getIo = () => io;
 
-module.exports = { init, getIo, emitRoomUpdated, emitTossCompleted, emitMatchStarted, emitScoreUpdate };
+module.exports = { init, getIo, emitRoomUpdated, emitTossCompleted, emitMatchStarted, emitScoreUpdate, emitNotification };

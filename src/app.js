@@ -19,6 +19,8 @@ const analyticsRoutes = require("./modules/analytics/analytics.routes");
 const leaderboardRoutes = require("./modules/leaderboard/leaderboard.routes");
 const highlightsRoutes = require("./modules/highlights/highlights.routes");
 const appConfigRoutes = require("./modules/appConfig/appConfig.routes");
+const uploadRoutes = require("./modules/upload/upload.routes");
+const notificationRoutes = require("./modules/notification/notification.routes");
 
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { maintenanceCheck } = require("./middlewares/maintenance.middleware");
@@ -28,9 +30,21 @@ const app = express();
 // Trust proxy on hosted environments (Render, etc.) so express-rate-limit works correctly
 app.set('trust proxy', 1);
 
+// Disable ETag to prevent 304 responses that return empty bodies to axios/fetch clients
+app.set('etag', false);
+
 app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
+
+// Prevent caching on API responses — always return fresh data with 200 status
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  next();
+});
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use(apiLimiter);
 
@@ -75,6 +89,8 @@ app.use("/api/audit-logs", auditLogRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/leaderboards", leaderboardRoutes);
 app.use("/api/highlights", highlightsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (_req, res) => {
   res.json({

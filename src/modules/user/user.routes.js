@@ -1,13 +1,20 @@
 const router = require('express').Router();
+const multer = require('multer');
 const { protect } = require('../../middlewares/auth.middleware');
 const {
   getProfileHandler,
   updateProfileHandler,
+  uploadAvatarHandler,
   getAllUsersHandler,
   getUserByIdHandler,
   getPlayerStatsHandler,
   checkAvailabilityHandler,
 } = require('./user.controller');
+
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // ─── Swagger component additions ─────────────────────────────────────────────
 
@@ -405,6 +412,36 @@ router.get('/profile', protect, getProfileHandler);
  *         $ref: '#/components/responses/Unauthorized'
  */
 router.put('/profile', protect, updateProfileHandler);
+
+/**
+ * @swagger
+ * /api/user/profile/avatar:
+ *   post:
+ *     summary: Upload profile avatar
+ *     description: >
+ *       Upload a profile photo (JPEG or PNG, max 5 MB).
+ *       **This can only be done once** — subsequent attempts will return 403.
+ *       The image is uploaded to Cloudinary and auto-cropped to 400x400.
+ *     tags: [User]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Updated user profile with avatar URL
+ *       403:
+ *         description: Avatar has already been changed once
+ */
+router.post('/profile/avatar', protect, memoryUpload.single('avatar'), uploadAvatarHandler);
 
 /**
  * @swagger

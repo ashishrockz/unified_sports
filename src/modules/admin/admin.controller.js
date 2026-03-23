@@ -22,6 +22,7 @@ const {
 const { adminAbandonMatch } = require('../match/match.service');
 const { adminAbandonRoom } = require('../room/room.service');
 const { logAction } = require('../auditLog/auditLog.service');
+const { getAllNotifications, getNotificationStats, deleteNotification } = require('../notification/notification.service');
 
 const adminLoginHandler = async (req, res, next) => {
   try {
@@ -115,9 +116,11 @@ const changePasswordHandler = async (req, res, next) => {
   }
 };
 
+const { cacheThrough } = require('../../config/cache');
+
 const getAdminDashboardHandler = async (req, res, next) => {
   try {
-    const stats = await getAdminDashboard();
+    const stats = await cacheThrough('short', 'admin:dashboard', () => getAdminDashboard());
     res.json(stats);
   } catch (err) {
     next(err);
@@ -261,6 +264,38 @@ const abandonRoomAdminHandler = async (req, res, next) => {
   }
 };
 
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const getNotificationsAdminHandler = async (req, res, next) => {
+  try {
+    const result = await getAllNotifications(req.query);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getNotificationStatsHandler = async (req, res, next) => {
+  try {
+    const stats = await getNotificationStats();
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteNotificationHandler = async (req, res, next) => {
+  try {
+    const notification = await deleteNotification(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    res.json({ message: 'Notification deleted' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   adminLoginHandler,
   getAllUsersHandler,
@@ -284,4 +319,7 @@ module.exports = {
   resetPasswordHandler,
   abandonMatchAdminHandler,
   abandonRoomAdminHandler,
+  getNotificationsAdminHandler,
+  getNotificationStatsHandler,
+  deleteNotificationHandler,
 };

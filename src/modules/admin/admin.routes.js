@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { protect }        = require('../../middlewares/auth.middleware');
-const { requireAdmin }   = require('../../middlewares/admin.middleware');
+const { requireStaff, requirePermission } = require('../../middlewares/admin.middleware');
 const { loginLimiter }   = require('../../middlewares/rateLimiter');
 const upload = require('../../config/upload');
 const {
@@ -26,6 +26,9 @@ const {
   resetPasswordHandler,
   abandonMatchAdminHandler,
   abandonRoomAdminHandler,
+  getNotificationsAdminHandler,
+  getNotificationStatsHandler,
+  deleteNotificationHandler,
 } = require('./admin.controller');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,9 +156,9 @@ router.post('/forgot-password', forgotPasswordHandler);
 router.post('/reset-password', resetPasswordHandler);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROTECTED — admin + superadmin
+// PROTECTED — all staff roles (super_admin, admin, manager, editor, viewer)
 // ─────────────────────────────────────────────────────────────────────────────
-router.use(protect, requireAdmin);
+router.use(protect, requireStaff);
 
 // ── Profile & Dashboard ──────────────────────────────────────────────────────
 
@@ -337,7 +340,7 @@ router.get('/dashboard', getAdminDashboardHandler);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.get('/rooms', getAllRoomsAdminHandler);
+router.get('/rooms', requirePermission('rooms.read'), getAllRoomsAdminHandler);
 
 /**
  * @swagger
@@ -362,7 +365,7 @@ router.get('/rooms', getAllRoomsAdminHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get('/rooms/:roomId', getRoomByIdAdminHandler);
+router.get('/rooms/:roomId', requirePermission('rooms.read'), getRoomByIdAdminHandler);
 
 /**
  * @swagger
@@ -397,7 +400,7 @@ router.get('/rooms/:roomId', getRoomByIdAdminHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/rooms/:roomId/abandon', abandonRoomAdminHandler);
+router.put('/rooms/:roomId/abandon', requirePermission('rooms.delete'), abandonRoomAdminHandler);
 
 /**
  * @swagger
@@ -426,7 +429,7 @@ router.put('/rooms/:roomId/abandon', abandonRoomAdminHandler);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.get('/matches', getAllMatchesAdminHandler);
+router.get('/matches', requirePermission('matches.read'), getAllMatchesAdminHandler);
 
 /**
  * @swagger
@@ -451,7 +454,7 @@ router.get('/matches', getAllMatchesAdminHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get('/matches/:matchId', getMatchByIdAdminHandler);
+router.get('/matches/:matchId', requirePermission('matches.read'), getMatchByIdAdminHandler);
 
 /**
  * @swagger
@@ -486,7 +489,7 @@ router.get('/matches/:matchId', getMatchByIdAdminHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/matches/:matchId/abandon', abandonMatchAdminHandler);
+router.put('/matches/:matchId/abandon', requirePermission('matches.delete'), abandonMatchAdminHandler);
 
 // ── User management ──────────────────────────────────────────────────────────
 
@@ -534,7 +537,7 @@ router.put('/matches/:matchId/abandon', abandonMatchAdminHandler);
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.get('/users', getAllUsersHandler);
+router.get('/users', requirePermission('users.read'), getAllUsersHandler);
 
 /**
  * @swagger
@@ -561,7 +564,7 @@ router.get('/users', getAllUsersHandler);
  *       200:
  *         description: Exported data
  */
-router.get('/users/export', exportUsersHandler);
+router.get('/users/export', requirePermission('users.read'), exportUsersHandler);
 
 /**
  * @swagger
@@ -608,7 +611,7 @@ router.get('/users/export', exportUsersHandler);
  *                       userId: { type: string }
  *                       message: { type: string }
  */
-router.put('/users/bulk-action', bulkUserActionHandler);
+router.put('/users/bulk-action', requirePermission('users.update'), bulkUserActionHandler);
 
 /**
  * @swagger
@@ -639,7 +642,7 @@ router.put('/users/bulk-action', bulkUserActionHandler);
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.get('/users/:userId', getUserDetailHandler);
+router.get('/users/:userId', requirePermission('users.read'), getUserDetailHandler);
 
 /**
  * @swagger
@@ -699,7 +702,7 @@ router.get('/users/:userId', getUserDetailHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/users/:userId/ban', banUserHandler);
+router.put('/users/:userId/ban', requirePermission('users.delete'), banUserHandler);
 
 /**
  * @swagger
@@ -739,7 +742,7 @@ router.put('/users/:userId/ban', banUserHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/users/:userId/unban', unbanUserHandler);
+router.put('/users/:userId/unban', requirePermission('users.update'), unbanUserHandler);
 
 /**
  * @swagger
@@ -779,7 +782,7 @@ router.put('/users/:userId/unban', unbanUserHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/users/:userId/activate', activateUserHandler);
+router.put('/users/:userId/activate', requirePermission('users.update'), activateUserHandler);
 
 /**
  * @swagger
@@ -824,6 +827,72 @@ router.put('/users/:userId/activate', activateUserHandler);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put('/users/:userId/deactivate', deactivateUserHandler);
+router.put('/users/:userId/deactivate', requirePermission('users.update'), deactivateUserHandler);
+
+// ── Notifications oversight ─────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/admin/notifications:
+ *   get:
+ *     summary: List all notifications (admin oversight)
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [match_completed, added_to_match, friend_request_received, friend_request_accepted, friend_request_rejected]
+ *       - in: query
+ *         name: read
+ *         schema: { type: string, enum: [true, false] }
+ *     responses:
+ *       200:
+ *         description: Paginated notification list
+ */
+router.get('/notifications', requirePermission('notifications.read'), getNotificationsAdminHandler);
+
+/**
+ * @swagger
+ * /api/admin/notifications/stats:
+ *   get:
+ *     summary: Get notification statistics
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Notification stats (total, unread, by type)
+ */
+router.get('/notifications/stats', requirePermission('notifications.read'), getNotificationStatsHandler);
+
+/**
+ * @swagger
+ * /api/admin/notifications/{id}:
+ *   delete:
+ *     summary: Delete a notification
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Notification deleted
+ *       404:
+ *         description: Not found
+ */
+router.delete('/notifications/:id', requirePermission('notifications.delete'), deleteNotificationHandler);
 
 module.exports = router;

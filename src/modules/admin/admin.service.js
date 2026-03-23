@@ -7,6 +7,7 @@ const Match  = require('../match/match.model');
 const PasswordResetToken = require('./passwordResetToken.model');
 const { fail } = require('../../utils/AppError');
 const { escapeRegex } = require('../../utils/sanitize');
+const { STAFF_ROLES } = require('../../config/permissions');
 
 const ADMIN_PUBLIC_FIELDS = 'name username email phone avatar role status createdAt updatedAt';
 
@@ -19,7 +20,7 @@ const ADMIN_PUBLIC_FIELDS = 'name username email phone avatar role status create
 const adminLogin = async (email, password) => {
   const actor = await User.findOne({
     email:  email.toLowerCase(),
-    role:   { $in: ['admin', 'superadmin'] },
+    role:   { $in: STAFF_ROLES },
   }).select('+password');
 
   if (!actor) fail('Invalid email or password', 401);
@@ -109,12 +110,17 @@ const changeUserStatus = async (actorId, targetUserId, newStatus, actorRole) => 
   const target = await User.findById(targetUserId);
   if (!target) fail('User not found', 404);
 
-  // Superadmin can never be touched
-  if (target.role === 'superadmin') {
+  // Super admin can never be touched
+  if (target.role === 'super_admin') {
     fail('Super admin account cannot be modified', 403);
   }
 
-  // Admin (employee) cannot touch other admin accounts
+  // Only super_admin and admin can manage staff accounts
+  if (STAFF_ROLES.includes(target.role) && !['super_admin', 'admin'].includes(actorRole)) {
+    fail('You do not have permission to manage staff accounts', 403);
+  }
+
+  // Admin cannot touch other admin accounts
   if (actorRole === 'admin' && target.role === 'admin') {
     fail('Admins cannot manage other admin accounts — contact the super admin', 403);
   }
@@ -341,7 +347,7 @@ const forgotPassword = async (email) => {
 
   const user = await User.findOne({
     email: email.toLowerCase(),
-    role: { $in: ['admin', 'superadmin'] },
+    role: { $in: STAFF_ROLES },
   });
 
   // Don't reveal whether the email exists
@@ -359,8 +365,7 @@ const forgotPassword = async (email) => {
     const { sendPasswordResetEmail } = require('../../config/mailer');
     await sendPasswordResetEmail(user.email, token, user.name);
   } catch (err) {
-    console.error('Failed to send reset email:', err.message);
-    // Don't fail - just log
+    // Silent fail — don't expose email delivery status
   }
 
   return { message: 'If that email is registered, a reset link has been sent' };

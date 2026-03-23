@@ -5,6 +5,7 @@ const User        = require('../user/user.model');
 const { fail }    = require('../../utils/AppError');
 const matchService = require('../match/match.service');
 const ws          = require('../../websocket');
+const { notifyAddedToMatch } = require('../notification/notification.service');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ const addFriendPlayer = async (roomId, creatorId, { friendUserId, playerName, te
 
   const updated = await getRoom(roomId);
   ws.emitRoomUpdated(roomId, updated);
+  notifyAddedToMatch(friendUserId, creatorId, updated).catch(() => {});
   return updated;
 };
 

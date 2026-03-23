@@ -34,9 +34,13 @@ const userSchema = new mongoose.Schema({
   avatar: {
     type: String,
   },
+  avatarChangedAt: {
+    type: Date,
+    default: null,
+  },
   role: {
     type: String,
-    enum: ['user', 'admin', 'superadmin'],
+    enum: ['user', 'super_admin', 'admin', 'manager', 'editor', 'viewer'],
     default: 'user',
   },
   // active   — normal account access
@@ -55,6 +59,29 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+
+  // ── Location (GeoJSON Point) ────────────────────────────────
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],   // [longitude, latitude]
+      default: [0, 0],
+    },
+    city:        { type: String, default: '' },
+    state:       { type: String, default: '' },
+    country:     { type: String, default: '' },
+    countryCode: { type: String, default: '' }, // ISO 3166-1 alpha-2 e.g. 'IN', 'US'
+  },
 }, { timestamps: true });
+
+// Geospatial index for $near queries (local leaderboards)
+userSchema.index({ 'location': '2dsphere' });
+
+// Fast country-scoped lookups
+userSchema.index({ 'location.countryCode': 1 });
 
 module.exports = mongoose.model('User', userSchema);

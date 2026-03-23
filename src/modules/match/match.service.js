@@ -3,6 +3,8 @@ const Room      = require('../room/room.model');
 const SportType = require('../sportType/sportType.model');
 const { fail }  = require('../../utils/AppError');
 const ws        = require('../../websocket');
+const { invalidate } = require('../../config/cache');
+const { notifyMatchCompleted } = require('../notification/notification.service');
 const {
   generateBallCommentary,
   generateOverSummary,
@@ -15,6 +17,20 @@ const {
 
 const MAX_COMMENTARY = 50; // keep last N entries on the match document
 const MAX_UNDO_STACK = 5;  // keep last N ball snapshots for undo
+
+/** Extract real user IDs from room players and fire match-completed notifications. */
+const fireMatchCompletedNotifications = async (match, room) => {
+  try {
+    const playerUserIds = (room.players || [])
+      .filter((p) => p.userId && !p.isStatic)
+      .map((p) => p.userId.toString());
+    if (playerUserIds.length > 0) {
+      await notifyMatchCompleted(match, playerUserIds);
+    }
+  } catch {
+    // Notifications are best-effort — don't block the match flow
+  }
+};
 
 const pushCommentary = (match, entry, extra = {}) => {
   if (!match.commentary) match.commentary = [];
@@ -190,6 +206,10 @@ const completeMatch = async (matchId, userId, { winner, margin, description }) =
   room.status = 'completed';
   await Promise.all([match.save(), room.save()]);
   ws.emitScoreUpdate(match.roomId, match);
+  invalidate('short', 'analytics:');
+  invalidate('medium', 'analytics:');
+  invalidate('medium', 'lb:');
+  fireMatchCompletedNotifications(match, room);
   return match;
 };
 
@@ -202,6 +222,9 @@ const abandonMatch = async (matchId, userId) => {
   room.status   = 'abandoned';
   await Promise.all([match.save(), room.save()]);
   ws.emitScoreUpdate(match.roomId, match);
+  invalidate('short', 'analytics:');
+  invalidate('medium', 'analytics:');
+  invalidate('medium', 'lb:');
   return match;
 };
 
@@ -244,9 +267,6 @@ const autoAbandonStaleMatches = async () => {
     count++;
   }
 
-  if (count > 0) {
-    console.log(`[AUTO-ABANDON] Abandoned ${count} stale match(es) older than 18 hours`);
-  }
   return count;
 };
 
@@ -482,6 +502,7 @@ const recordBall = async (matchId, userId, ballData) => {
 
         room.status = 'completed';
         await room.save();
+        fireMatchCompletedNotifications(match, room);
       }
     }
   }
@@ -676,6 +697,7 @@ const recordSuperOverBall = async (matchId, userId, ballData) => {
         pushCommentary(match, generateMatchEnd(match.result));
         room.status = 'completed';
         await room.save();
+        fireMatchCompletedNotifications(match, room);
       } else {
         // Another tie in super over — extremely rare, declare draw
         match.status = 'completed';
@@ -685,6 +707,7 @@ const recordSuperOverBall = async (matchId, userId, ballData) => {
         pushCommentary(match, generateMatchEnd(match.result));
         room.status = 'completed';
         await room.save();
+        fireMatchCompletedNotifications(match, room);
       }
     }
   }
@@ -705,6 +728,7 @@ const recordSuperOverBall = async (matchId, userId, ballData) => {
       pushCommentary(match, generateMatchEnd(match.result));
       room.status = 'completed';
       await room.save();
+      fireMatchCompletedNotifications(match, room);
     }
   }
 
@@ -920,6 +944,7 @@ const recordPoint = async (matchId, userId, { team }) => {
         };
         room.status = 'completed';
         await room.save();
+        fireMatchCompletedNotifications(match, room);
       } else {
         // Move to next set
         match.currentSet  += 1;

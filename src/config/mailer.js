@@ -21,7 +21,6 @@ const getSmtpTransporter = () => {
 
 // ── Send function ─────────────────────────────────────────
 const sendMail = async ({ to, subject, html, text }) => {
-  console.log('[MAILER] Sending to', to);
   const info = await getSmtpTransporter().sendMail({
     from: `"${appName()}" <${emailFrom()}>`,
     to,
@@ -29,7 +28,6 @@ const sendMail = async ({ to, subject, html, text }) => {
     html,
     text,
   });
-  console.log('[MAILER] Sent to', to, '| messageId:', info.messageId);
   return info;
 };
 

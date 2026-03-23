@@ -1,6 +1,7 @@
 const {
   getProfile,
   updateProfile,
+  uploadAvatar,
   getAllUsers,
   getUserById,
   getPlayerStats,
@@ -53,6 +54,15 @@ const getPlayerStatsHandler = async (req, res, next) => {
   }
 };
 
+const uploadAvatarHandler = async (req, res, next) => {
+  try {
+    const user = await uploadAvatar(req.user._id, req.file);
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const checkAvailabilityHandler = async (req, res, next) => {
   try {
     const { field, value } = req.query;
@@ -66,6 +76,7 @@ const checkAvailabilityHandler = async (req, res, next) => {
 module.exports = {
   getProfileHandler,
   updateProfileHandler,
+  uploadAvatarHandler,
   getAllUsersHandler,
   getUserByIdHandler,
   getPlayerStatsHandler,

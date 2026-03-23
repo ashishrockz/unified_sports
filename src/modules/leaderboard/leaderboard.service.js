@@ -75,10 +75,57 @@ const getFriendIds = async (userId) => {
   return ids;
 };
 
-/** Filter leaderboard entries to only include friends (+ self) */
-const filterByScope = (leaderboard, friendIds) => {
-  if (!friendIds) return leaderboard;
-  return leaderboard.filter((e) => friendIds.has(e.userId));
+/**
+ * Get set of user IDs that match the requested scope.
+ * Returns null for 'all' scope (no filtering).
+ */
+const getUserIdsInScope = async (userId, scope) => {
+  if (!scope || scope === 'all') return null;
+  if (scope === 'friends') return getFriendIds(userId);
+
+  const currentUser = await User.findById(userId).select('location').lean();
+  if (!currentUser?.location) return null;
+
+  if (scope === 'local') {
+    // Skip if user has no real coordinates (default [0,0] = null island)
+    const [lng, lat] = currentUser.location.coordinates || [0, 0];
+    if (lng === 0 && lat === 0) return null;
+
+    // Users within ~50 km radius
+    const nearbyUsers = await User.find({
+      'location': {
+        $near: {
+          $geometry: { type: 'Point', coordinates: [lng, lat] },
+          $maxDistance: 50000, // 50 km in metres
+        },
+      },
+    }).select('_id').lean();
+
+    const ids = new Set(nearbyUsers.map((u) => u._id.toString()));
+    ids.add(userId.toString());
+    return ids;
+  }
+
+  if (scope === 'country') {
+    const cc = currentUser.location.countryCode;
+    if (!cc) return null;
+
+    const countryUsers = await User.find({
+      'location.countryCode': cc,
+    }).select('_id').lean();
+
+    const ids = new Set(countryUsers.map((u) => u._id.toString()));
+    ids.add(userId.toString());
+    return ids;
+  }
+
+  return null;
+};
+
+/** Filter leaderboard entries to only include scoped users */
+const filterByScope = (leaderboard, scopeIds) => {
+  if (!scopeIds) return leaderboard;
+  return leaderboard.filter((e) => scopeIds.has(e.userId));
 };
 
 /** Load completed matches for a sport/period, with room populated */
@@ -95,7 +142,7 @@ const loadMatches = async (sport, period, extraFilter = {}, matchType) => {
 
 const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
   const matches = await loadMatches('cricket', period, {}, matchType);
-  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
+  const scopeIds = await getUserIdsInScope(userId, scope);
   const stats = {};
 
   for (const match of matches) {
@@ -167,7 +214,7 @@ const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20, sc
     average: s._innings.size > 0 ? Number((s.runs / s._innings.size).toFixed(2)) : 0,
   }));
 
-  leaderboard = filterByScope(leaderboard, friendIds);
+  leaderboard = filterByScope(leaderboard, scopeIds);
   leaderboard.sort((a, b) => b.runs - a.runs);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
@@ -176,7 +223,7 @@ const getCricketBattingLeaderboard = async ({ period = 'alltime', limit = 20, sc
 
 const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
   const matches = await loadMatches('cricket', period, {}, matchType);
-  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
+  const scopeIds = await getUserIdsInScope(userId, scope);
   const stats = {};
 
   for (const match of matches) {
@@ -261,7 +308,7 @@ const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20, sc
     };
   });
 
-  leaderboard = filterByScope(leaderboard, friendIds);
+  leaderboard = filterByScope(leaderboard, scopeIds);
   leaderboard.sort((a, b) => b.wickets - a.wickets || a.economy - b.economy);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
@@ -270,7 +317,7 @@ const getCricketBowlingLeaderboard = async ({ period = 'alltime', limit = 20, sc
 
 const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
   const matches = await loadMatches(sport, period, { 'result.winner': { $in: ['A', 'B', 'draw'] } }, matchType);
-  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
+  const scopeIds = await getUserIdsInScope(userId, scope);
   const stats = {};
 
   for (const match of matches) {
@@ -311,7 +358,7 @@ const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope
     winPercentage: s.matches > 0 ? Number(((s.wins / s.matches) * 100).toFixed(1)) : 0,
   }));
 
-  leaderboard = filterByScope(leaderboard, friendIds);
+  leaderboard = filterByScope(leaderboard, scopeIds);
   leaderboard.sort((a, b) => b.wins - a.wins || b.winPercentage - a.winPercentage);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };
@@ -320,7 +367,7 @@ const getWinsLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope
 
 const getMostMatchesLeaderboard = async ({ sport, period = 'alltime', limit = 20, scope, matchType, userId } = {}) => {
   const matches = await loadMatches(sport, period, {}, matchType);
-  const friendIds = scope === 'friends' ? await getFriendIds(userId) : null;
+  const scopeIds = await getUserIdsInScope(userId, scope);
   const stats = {};
 
   for (const match of matches) {
@@ -343,7 +390,7 @@ const getMostMatchesLeaderboard = async ({ sport, period = 'alltime', limit = 20
   }
 
   let leaderboard = Object.values(stats);
-  leaderboard = filterByScope(leaderboard, friendIds);
+  leaderboard = filterByScope(leaderboard, scopeIds);
   leaderboard.sort((a, b) => b.matches - a.matches);
   return enrichWithUserData(leaderboard.slice(0, Number(limit)));
 };

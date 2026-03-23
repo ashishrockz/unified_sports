@@ -24,20 +24,15 @@ const sendOtp = async (identifier, type) => {
     try {
       const result = await sendSms(identifier, `Your CricCircle OTP is: ${otp}. Valid for 10 minutes.`);
       if (!result.success) {
-        console.log(`[SMS OTP] Twilio not available. Phone: ${identifier} | OTP: ${otp}`);
         smsSent = false;
       }
     } catch (err) {
-      console.error('[SMS OTP ERROR]', err.message);
       smsSent = false;
     }
   } else if (type === 'email') {
     try {
-      console.log('[EMAIL OTP] Sending OTP to', identifier);
       await sendOtpEmail(identifier, otp);
-      console.log('[EMAIL OTP] Successfully sent to', identifier);
     } catch (err) {
-      console.error('[EMAIL OTP ERROR]', err.message, err.stack);
       fail('Failed to send OTP email. Please try again.', 500);
     }
   }

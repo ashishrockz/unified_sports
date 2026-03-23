@@ -21,8 +21,8 @@ const createAdminHandler = async (req, res, next) => {
 
 const getAllAdminsHandler = async (req, res, next) => {
   try {
-    const { search, status, page, limit } = req.query;
-    const result = await getAllAdmins({ search, status, page, limit });
+    const { search, status, role, page, limit } = req.query;
+    const result = await getAllAdmins({ search, status, role, page, limit });
     res.json(result);
   } catch (err) {
     next(err);

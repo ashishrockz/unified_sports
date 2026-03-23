@@ -2,6 +2,7 @@ const User   = require('./user.model');
 const Friend = require('../friends/friend.model');
 const Match  = require('../match/match.model');
 const { fail } = require('../../utils/AppError');
+const cloudinary = require('../../config/cloudinary');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,11 +34,35 @@ const getProfile = async (userId) => {
 };
 
 const updateProfile = async (userId, updates) => {
-  const allowed = ['name', 'avatar', 'username', 'phone', 'email', 'termsAcceptedAt'];
+  const allowed = ['name', 'avatar', 'username', 'phone', 'email', 'termsAcceptedAt', 'location'];
   const filtered = {};
   allowed.forEach((key) => {
     if (updates[key] !== undefined) filtered[key] = updates[key];
   });
+
+  // Validate location if provided
+  if (filtered.location) {
+    const loc = filtered.location;
+    if (loc.coordinates && Array.isArray(loc.coordinates)) {
+      const [lng, lat] = loc.coordinates;
+      if (typeof lng !== 'number' || typeof lat !== 'number' ||
+          lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        fail('Invalid coordinates: longitude must be -180..180, latitude -90..90', 400);
+      }
+    }
+    if (loc.countryCode && !/^[A-Z]{2}$/.test(loc.countryCode)) {
+      fail('countryCode must be a 2-letter ISO 3166-1 alpha-2 code (e.g. "IN", "US")', 400);
+    }
+    // Ensure GeoJSON type is set
+    filtered.location = {
+      type: 'Point',
+      coordinates: loc.coordinates || [0, 0],
+      city: loc.city || '',
+      state: loc.state || '',
+      country: loc.country || '',
+      countryCode: loc.countryCode || '',
+    };
+  }
 
   // Uniqueness checks for username, phone, email
   const uniqueChecks = [];
@@ -76,6 +101,62 @@ const updateProfile = async (userId, updates) => {
   });
 
   const obj = user.toObject();
+  obj.friendsCount = friendsCount;
+  return obj;
+};
+
+/**
+ * Upload a user's profile avatar to Cloudinary.
+ * Enforces one-time change: once avatarChangedAt is set, further changes are blocked.
+ */
+const uploadAvatar = async (userId, file) => {
+  if (!file) fail('No file provided', 400);
+
+  const user = await User.findById(userId);
+  if (!user) fail('User not found', 404);
+
+  // Enforce one-time change: if the user already uploaded an avatar, block further changes
+  if (user.avatarChangedAt) {
+    fail('Profile photo can only be changed once', 403);
+  }
+
+  const allowedTypes = ['image/jpeg', 'image/png'];
+  if (!allowedTypes.includes(file.mimetype)) {
+    fail('Only JPEG and PNG images are allowed', 400);
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    fail('Image file size must be under 5 MB', 400);
+  }
+
+  const result = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'circket/avatars',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png'],
+        transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face' }],
+      },
+      (error, res) => {
+        if (error) reject(error);
+        else resolve(res);
+      },
+    );
+    stream.end(file.buffer);
+  });
+
+  user.avatar = result.secure_url;
+  user.avatarChangedAt = new Date();
+  await user.save();
+
+  const friendsCount = await Friend.countDocuments({
+    $or: [{ requester: userId }, { recipient: userId }],
+    status: 'accepted',
+  });
+
+  const obj = user.toObject();
+  delete obj.password;
+  delete obj.__v;
   obj.friendsCount = friendsCount;
   return obj;
 };
@@ -503,6 +584,7 @@ const getPlayerStats = async (targetUserId) => {
 module.exports = {
   getProfile,
   updateProfile,
+  uploadAvatar,
   getAllUsers,
   getUserById,
   getPlayerStats,

@@ -1,6 +1,11 @@
 const Friend = require('./friend.model');
 const User   = require('../user/user.model');
 const { fail } = require('../../utils/AppError');
+const {
+  notifyFriendRequestReceived,
+  notifyFriendRequestAccepted,
+  notifyFriendRequestRejected,
+} = require('../notification/notification.service');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +60,7 @@ const sendRequest = async (requesterId, recipientId) => {
       if (existing.recipient.toString() === requesterId.toString()) {
         existing.status = 'accepted';
         await existing.save();
+        notifyFriendRequestAccepted(existing.requester.toString(), requesterId, existing._id).catch(() => {});
         return {
           autoAccepted: true,
           message: 'Friend request accepted — you both requested each other',
@@ -75,7 +81,9 @@ const sendRequest = async (requesterId, recipientId) => {
     }
   }
 
-  return Friend.create({ requester: requesterId, recipient: recipientId });
+  const friendship = await Friend.create({ requester: requesterId, recipient: recipientId });
+  notifyFriendRequestReceived(recipientId, requesterId, friendship._id).catch(() => {});
+  return friendship;
 };
 
 /**
@@ -93,6 +101,7 @@ const acceptRequest = async (userId, requestId) => {
 
   request.status = 'accepted';
   await request.save();
+  notifyFriendRequestAccepted(request.requester.toString(), userId, request._id).catch(() => {});
   return request;
 };
 
@@ -112,6 +121,7 @@ const rejectRequest = async (userId, requestId) => {
 
   request.status = 'rejected';
   await request.save();
+  notifyFriendRequestRejected(request.requester.toString(), userId, request._id).catch(() => {});
   return request;
 };
 

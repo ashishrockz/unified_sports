@@ -23,6 +23,13 @@ router.use(protect);
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: scope
+ *         schema: { type: string, enum: [all, friends, local, country], default: all }
+ *         description: "all = global, friends = friend list, local = ~50 km radius, country = same country"
+ *       - in: query
+ *         name: matchType
+ *         schema: { type: string, enum: [all, local, tournament], default: all }
  */
 router.get('/cricket/batting', cricketBattingHandler);
 
@@ -39,6 +46,13 @@ router.get('/cricket/batting', cricketBattingHandler);
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: scope
+ *         schema: { type: string, enum: [all, friends, local, country], default: all }
+ *         description: "all = global, friends = friend list, local = ~50 km radius, country = same country"
+ *       - in: query
+ *         name: matchType
+ *         schema: { type: string, enum: [all, local, tournament], default: all }
  */
 router.get('/cricket/bowling', cricketBowlingHandler);
 
@@ -58,6 +72,13 @@ router.get('/cricket/bowling', cricketBowlingHandler);
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: scope
+ *         schema: { type: string, enum: [all, friends, local, country], default: all }
+ *         description: "all = global, friends = friend list, local = ~50 km radius, country = same country"
+ *       - in: query
+ *         name: matchType
+ *         schema: { type: string, enum: [all, local, tournament], default: all }
  */
 router.get('/wins', winsHandler);
 
@@ -77,6 +98,13 @@ router.get('/wins', winsHandler);
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: scope
+ *         schema: { type: string, enum: [all, friends, local, country], default: all }
+ *         description: "all = global, friends = friend list, local = ~50 km radius, country = same country"
+ *       - in: query
+ *         name: matchType
+ *         schema: { type: string, enum: [all, local, tournament], default: all }
  */
 router.get('/most-matches', mostMatchesHandler);
 
