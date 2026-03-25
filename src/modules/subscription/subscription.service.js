@@ -246,13 +246,19 @@ const createOrder = async (userId, { type, planId, matchPackId }) => {
   }
 
   // Create Razorpay order (amount in paise)
-  console.log('[RAZORPAY] key_id present:', !!process.env.RAZORPAY_KEY_ID, 'key_secret present:', !!process.env.RAZORPAY_KEY_SECRET);
-  const rzpOrder = await getRazorpay().orders.create({
-    amount:   Math.round(amount * 100),
-    currency,
-    receipt:  `rcpt_${userId}_${Date.now()}`,
-    notes:    { userId: userId.toString(), type },
-  });
+  // Create Razorpay order (amount in paise)
+  let rzpOrder;
+  try {
+    rzpOrder = await getRazorpay().orders.create({
+      amount:   Math.round(amount * 100),
+      currency,
+      receipt:  `rcpt_${Date.now()}`,
+      notes:    { userId: userId.toString(), type },
+    });
+  } catch (rzpErr) {
+    console.error('[RAZORPAY] Order creation failed:', rzpErr?.error || rzpErr?.message || rzpErr);
+    fail('Payment service error: ' + (rzpErr?.error?.description || rzpErr?.message || 'Unknown error'), 502);
+  }
 
   const order = await Order.create({
     userId,
