@@ -32,6 +32,7 @@ const ROLE_PERMISSIONS = {
     'rooms.read', 'rooms.update', 'rooms.delete',
     'sport_types.read', 'sport_types.create', 'sport_types.update', 'sport_types.delete',
     'notifications.read', 'notifications.delete',
+    'plans.read', 'plans.update',
   ],
 
   manager: [

@@ -30,6 +30,15 @@ const {
   getNotificationStatsHandler,
   deleteNotificationHandler,
 } = require('./admin.controller');
+const {
+  adminGetAllPlansHandler,
+  adminUpdatePlanHandler,
+  adminGetAllMatchPacksHandler,
+  adminUpdateMatchPackHandler,
+  adminGetSubscriptionsHandler,
+  adminGetOrdersHandler,
+  adminGetRevenueStatsHandler,
+} = require('../subscription/subscription.controller');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC — no token required
@@ -894,5 +903,141 @@ router.get('/notifications/stats', requirePermission('notifications.read'), getN
  *         description: Not found
  */
 router.delete('/notifications/:id', requirePermission('notifications.delete'), deleteNotificationHandler);
+
+// ── Subscription / Plans management ─────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/admin/plans:
+ *   get:
+ *     summary: List all plans (including inactive)
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All plans
+ */
+router.get('/plans', requirePermission('plans.read'), adminGetAllPlansHandler);
+
+/**
+ * @swagger
+ * /api/admin/plans/{id}:
+ *   put:
+ *     summary: Update a plan (limits, features, pricing)
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Plan updated
+ */
+router.put('/plans/:id', requirePermission('plans.update'), adminUpdatePlanHandler);
+
+/**
+ * @swagger
+ * /api/admin/match-packs:
+ *   get:
+ *     summary: List all match packs (including inactive)
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All match packs
+ */
+router.get('/match-packs', requirePermission('plans.read'), adminGetAllMatchPacksHandler);
+
+/**
+ * @swagger
+ * /api/admin/match-packs/{id}:
+ *   put:
+ *     summary: Update a match pack
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Match pack updated
+ */
+router.put('/match-packs/:id', requirePermission('plans.update'), adminUpdateMatchPackHandler);
+
+/**
+ * @swagger
+ * /api/admin/subscriptions:
+ *   get:
+ *     summary: List all user subscriptions
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [active, expired, cancelled] }
+ *       - in: query
+ *         name: planId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated subscriptions
+ */
+router.get('/subscriptions', requirePermission('plans.read'), adminGetSubscriptionsHandler);
+
+/**
+ * @swagger
+ * /api/admin/orders:
+ *   get:
+ *     summary: List all orders
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [created, paid, failed, refunded] }
+ *       - in: query
+ *         name: type
+ *         schema: { type: string, enum: [subscription, match_pack] }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated orders
+ */
+router.get('/orders', requirePermission('plans.read'), adminGetOrdersHandler);
+
+/**
+ * @swagger
+ * /api/admin/revenue/stats:
+ *   get:
+ *     summary: Revenue dashboard stats
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Revenue stats (total, monthly breakdown, plan distribution)
+ */
+router.get('/revenue/stats', requirePermission('plans.read'), adminGetRevenueStatsHandler);
 
 module.exports = router;

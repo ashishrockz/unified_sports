@@ -4,6 +4,7 @@ const User        = require('../user/user.model');
 const { sendOtpEmail } = require('../../config/mailer');
 const { sendSms }      = require('../../config/sms');
 const { fail }         = require('../../utils/AppError');
+const { getOrCreateSubscription } = require('../subscription/subscription.service');
 
 const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
 
@@ -69,8 +70,15 @@ const verifyOtp = async (identifier, type, otp) => {
     : { email: identifier };
 
   let user = await User.findOne(query);
+  let isNewUser = false;
   if (!user) {
     user = await User.create({ ...query, role: 'user', status: 'active' });
+    isNewUser = true;
+  }
+
+  // Auto-assign free plan for new users (best-effort — don't block login)
+  if (isNewUser) {
+    getOrCreateSubscription(user._id).catch(() => {});
   }
 
   const token = jwt.sign(

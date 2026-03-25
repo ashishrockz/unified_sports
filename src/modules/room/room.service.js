@@ -6,6 +6,7 @@ const { fail }    = require('../../utils/AppError');
 const matchService = require('../match/match.service');
 const ws          = require('../../websocket');
 const { notifyAddedToMatch } = require('../notification/notification.service');
+const subscriptionService = require('../subscription/subscription.service');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,22 @@ const createRoom = async (userId, { sportTypeId, name, teamAName, teamBName, ove
     status: { $in: ['waiting', 'toss_pending', 'active'] },
   });
   if (activeRoom) fail('You are already in an active room. Leave or complete it first.', 409);
+
+  // Check subscription match limits
+  const limitCheck = await subscriptionService.checkMatchLimit(userId);
+  if (!limitCheck.allowed) {
+    const err = new Error(limitCheck.message);
+    err.status = 403;
+    err.data = {
+      upgradeRequired: true,
+      currentPlan: limitCheck.currentPlan,
+      usage: limitCheck.usage,
+    };
+    throw err;
+  }
+  if (limitCheck.usingExtraMatch) {
+    await subscriptionService.consumeExtraMatch(userId);
+  }
 
   // Validate overs if provided
   let overs = null;
@@ -87,19 +104,40 @@ const getRooms = async ({ userId, status, sportTypeId, page = 1, limit = 20 } = 
   if (status) filter.status = status;
   if (sportTypeId) filter.sportTypeId = sportTypeId;
 
+  // Apply match history limit for completed rooms based on user's plan
+  let effectiveLimit = Number(limit);
+  let historyLimited = false;
+  if (userId && status === 'completed') {
+    try {
+      const sub = await subscriptionService.getUserSubscription(userId);
+      const maxHistory = sub.planId?.limits?.matchHistoryCount;
+      if (maxHistory && maxHistory > 0) {
+        effectiveLimit = Math.min(effectiveLimit, maxHistory);
+        historyLimited = true;
+      }
+    } catch {
+      // If subscription lookup fails, proceed without limit
+    }
+  }
+
+  const skip = historyLimited ? 0 : (Number(page) - 1) * effectiveLimit;
+
   const [rooms, total] = await Promise.all([
     Room.find(filter)
       .populate('creator', 'name username avatar')
       .populate('sportTypeId', 'name slug sport')
       .sort({ createdAt: -1 })
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit)),
+      .skip(skip)
+      .limit(effectiveLimit),
     Room.countDocuments(filter),
   ]);
 
+  const displayTotal = historyLimited ? Math.min(total, effectiveLimit) : total;
+
   return {
     rooms,
-    pagination: { page: Number(page), limit: Number(limit), total, totalPages: Math.ceil(total / Number(limit)) },
+    pagination: { page: Number(page), limit: effectiveLimit, total: displayTotal, totalPages: Math.ceil(displayTotal / effectiveLimit) },
+    ...(historyLimited && { historyLimit: effectiveLimit }),
   };
 };
 

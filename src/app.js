@@ -21,6 +21,8 @@ const highlightsRoutes = require("./modules/highlights/highlights.routes");
 const appConfigRoutes = require("./modules/appConfig/appConfig.routes");
 const uploadRoutes = require("./modules/upload/upload.routes");
 const notificationRoutes = require("./modules/notification/notification.routes");
+const subscriptionRoutes = require("./modules/subscription/subscription.routes");
+const webhookRoutes = require("./modules/subscription/webhook.routes");
 
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { maintenanceCheck } = require("./middlewares/maintenance.middleware");
@@ -91,6 +93,8 @@ app.use("/api/leaderboards", leaderboardRoutes);
 app.use("/api/highlights", highlightsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 app.get("/", (_req, res) => {
   res.json({

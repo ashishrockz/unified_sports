@@ -10,6 +10,12 @@ const {
   removeAdminHandler,
   getDashboardStatsHandler,
 } = require('./superadmin.controller');
+const {
+  superadminCreatePlanHandler,
+  superadminDeletePlanHandler,
+  superadminCreateMatchPackHandler,
+  superadminDeleteMatchPackHandler,
+} = require('../subscription/subscription.controller');
 
 // All superadmin routes require a valid JWT + superadmin role
 router.use(protect, requireSuperAdmin);
@@ -497,5 +503,115 @@ router.put('/admins/:adminId/deactivate', deactivateAdminHandler);
  *         $ref: '#/components/responses/NotFound'
  */
 router.delete('/admins/:adminId', removeAdminHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subscription plan & match pack management (superadmin only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/superadmin/plans:
+ *   post:
+ *     summary: Create a subscription plan
+ *     description: Only superadmin can create new plans.
+ *     tags: [SuperAdmin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, slug, price]
+ *             properties:
+ *               name:        { type: string, example: Pro }
+ *               slug:        { type: string, example: pro }
+ *               description: { type: string }
+ *               price:       { type: number, example: 99 }
+ *               interval:    { type: string, enum: [monthly, yearly, lifetime] }
+ *               isDefault:   { type: boolean }
+ *               limits:
+ *                 type: object
+ *                 properties:
+ *                   matchesPerDay:     { type: number }
+ *                   matchesPerWeek:    { type: number }
+ *                   matchHistoryCount: { type: number }
+ *               features:
+ *                 type: object
+ *                 properties:
+ *                   adFree:     { type: boolean }
+ *                   commentary: { type: boolean }
+ *                   analytics:  { type: boolean }
+ *     responses:
+ *       201:
+ *         description: Plan created
+ */
+router.post('/plans', superadminCreatePlanHandler);
+
+/**
+ * @swagger
+ * /api/superadmin/plans/{id}:
+ *   delete:
+ *     summary: Deactivate a plan
+ *     description: Soft-deletes (deactivates) a plan. Cannot delete the default plan.
+ *     tags: [SuperAdmin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Plan deactivated
+ */
+router.delete('/plans/:id', superadminDeletePlanHandler);
+
+/**
+ * @swagger
+ * /api/superadmin/match-packs:
+ *   post:
+ *     summary: Create a match pack
+ *     description: Only superadmin can create new match packs.
+ *     tags: [SuperAdmin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, matchCount, price]
+ *             properties:
+ *               name:       { type: string, example: "5 Matches" }
+ *               matchCount: { type: number, example: 5 }
+ *               price:      { type: number, example: 39 }
+ *     responses:
+ *       201:
+ *         description: Match pack created
+ */
+router.post('/match-packs', superadminCreateMatchPackHandler);
+
+/**
+ * @swagger
+ * /api/superadmin/match-packs/{id}:
+ *   delete:
+ *     summary: Deactivate a match pack
+ *     tags: [SuperAdmin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Match pack deactivated
+ */
+router.delete('/match-packs/:id', superadminDeleteMatchPackHandler);
 
 module.exports = router;
