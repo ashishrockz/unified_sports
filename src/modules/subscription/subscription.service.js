@@ -246,6 +246,7 @@ const createOrder = async (userId, { type, planId, matchPackId }) => {
   }
 
   // Create Razorpay order (amount in paise)
+  console.log('[RAZORPAY] key_id present:', !!process.env.RAZORPAY_KEY_ID, 'key_secret present:', !!process.env.RAZORPAY_KEY_SECRET);
   const rzpOrder = await getRazorpay().orders.create({
     amount:   Math.round(amount * 100),
     currency,
